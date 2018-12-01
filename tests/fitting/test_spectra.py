@@ -87,7 +87,7 @@ class TestSpectrumFittingFunctions(ut.TestCase):
         ultimately be deprecated. (Note the magic numbers.)
         """
         # Fit the data
-        spectrum_fit_result = spectra.fit_spectrum(self.x, np.real(self.y), 2)
+        spectrum_fit_result = spectra.fit_spectrum(self.x, np.imag(self.y), 1)
         # Check that the reduced-chi-squared statistic is tolerably small (TODO: make this meaningful)
         self.assertLess(spectrum_fit_result.redchi, self.redchi_tolerance_absolute)
 

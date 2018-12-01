@@ -26,7 +26,7 @@ Where we don't want to reinvent the wheel:
   * Database? I'm not actually clear on this. What to do here depends on how/where data is currently hosted. Personally, I find the idea of saving a bunch of hand-titled .json files in some directory somewhere on a local machine to be a little kludgy. We can probably do better, but I'm not sure if that's actually how things are currently done.
 * Writing our own fitting library. Should use established tools like lmfit.
 
-Stretch goals:
+Stretch goals and/or wish items that might be downright silly:
 * Compatibility with quantum programming environment: either home-brewed or commercial or open-source tools:
 	* pyQuil
 	* LIQUi|>
@@ -34,3 +34,4 @@ Stretch goals:
   * Quipper
   * etc.
 * Web interface? It might be pretty cool to run experiments remotely from a browser, and it would be a fun excuse to learn `trendywebframework.js`. Eventually, could even open up to public along the lines of commercial cloud QC offerings (for ++publicity and therefore ++funding), preferably coincident with a major paper release. There are more than a few catches, though, including that this opens up a host of security issues that didn't exist before, that it might require updating server hardware, etc.
+* Integration with Slack?

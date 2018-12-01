@@ -17,13 +17,13 @@ from dysart.fitting.spectra import *
 np.random.seed(373432261)
 
 # Location of data file(s)
-sample_data_path = os.path.relpath('../../sample_data/')
+sample_data_path = 'sample_data/'
 # os.readlink(os.path.expanduser('~') + '/EQuS') + '/data/'
 file_name = 'qubit_spectroscopy/20181005_DME_3x3qubits_v2/QBSpectro_TMM10_qu1vBobbin.hdf5'
 #'BFC3-8B-spec_thru_Q1_at0Bobbin_rerun.hdf5'
 
 # Import the data file 
-log_file = Labber.LogFile(sample_data_path + file_name)
+log_file = Labber.LogFile(os.path.abspath(sample_data_path + file_name))
 
 # Create test plot, find a minimum
 qubit_number = 1

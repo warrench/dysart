@@ -16,6 +16,7 @@ import operator
 # building in fit_spectrum. DRY it out!
 # TODO: SpectrumModel constructor is ugly.
 # TODO: spectrum_fit is really quite slow.
+# Make the guessing functions the guess method of the SpectrumModel class.
 
 # Global definitions
 RESONANCE_MODEL = models.ConstantModel() + models.LorentzianModel()
