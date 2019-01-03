@@ -1,4 +1,4 @@
-# Add packages to test to the path
+# Put modules to test on the path
 import env
 # Add some helper packages
 import numpy as np

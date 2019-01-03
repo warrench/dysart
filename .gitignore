@@ -1,5 +1,9 @@
 ### added by me ###
 
+# Personal todo files
+todo*
+TODO*
+
 # Python virtual environment
 env
 pyenv

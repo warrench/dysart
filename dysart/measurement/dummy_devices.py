@@ -12,7 +12,7 @@ day_sec = 60*60*24
 
 
 def shifted_logistic(x):
-    return 2/(1 + np.exp(-x)) - 1
+    return 2/(1 + np.exp(-2*x)) - 1
 
 
 class Device:
@@ -24,7 +24,8 @@ class Device:
         """
         self.decal_rate = decal_rate  # Decalibration rate in 1/second
         self.cal_delay = cal_delay
-        self.refresh()
+        # Call base-class refresh without ambiguity
+        Device.refresh(self, time.time())
 
     def refresh(self, t_new):
         """
@@ -39,16 +40,22 @@ class Fizzer(Device):
     updating every time a public method is called.
     """
 
-    def __init__(self, carbonation=1, time_constant_days=1):
+    def __init__(self, carbonation=1, time_const_sec=1):
         """
         Initializes Fizzer with time constant 1 day
         """
         self.carbonation = carbonation
-        self.time_constant_sec = time_constant_days * day_sec
-        super().__init__(0)
+        self.time_const_sec = time_const_sec
+        super().__init__()
 
     def refresh(self):
+        """
+        Update stale values
+        """
         t_new = time.time()
+        dt = t_new - self.cal_time
+        carbonation = self.carbonation*np.exp(-dt/self.time_const_sec)
+        self.carbonation = carbonation
         super().refresh(t_new)
 
     def add_carbonation(self, carbonation):
@@ -56,12 +63,8 @@ class Fizzer(Device):
         self.refresh()
 
     def get_carbonation(self):
-        t_new = time.time()
-        dt = t_new - self.cal_time
-        carbonation = self.carbonation*np.exp(-dt/self.time_constant_sec)
-        self.carbonation = carbonation
-        super().refresh(t_new)
-        return carbonation
+        self.refresh()
+        return self.carbonation
 
     def get_fizziness(self):
         """
@@ -88,6 +91,9 @@ class Fizzmeter(Device):
         super().__init__(decal_rate_sec)
 
     def refresh(self):
+        """
+        Update stale values
+        """
         t_new = time.time()
         dt = t_new - self.cal_time
         self.bias += np.random.normal(0, dt * self.decal_rate)
@@ -102,7 +108,7 @@ class Fizzmeter(Device):
         self.refresh()
 
         noise = np.random.normal(0, self.uncertainty)
-        return fizzer.fizziness + self.bias + noise
+        return fizzer.get_fizziness() + self.bias + noise
 
     def calibrate(self):
         time.sleep(self.cal_delay)
@@ -118,6 +124,9 @@ class Carbonator(Device):
         self.uncertainty = uncertainty
 
     def refresh(self):
+        """
+        Update stale values
+        """
         t_new = time.time()
         super().refresh(t_new)
 
@@ -128,6 +137,28 @@ class Carbonator(Device):
     def carbonate(self, fizzer, carbonation):
         noise = np.random.normal(0, self.get_uncertainty())
 
+
+class Spinner(Device):
+
+    def __init__(self):
+        super().__init__()
+
+    def refresh(self):
+        """
+        Update stale values
+        """
+        pass
+
+class Spinmeter(Device):
+
+    def __init__(self):
+        super().__init__()
+
+    def refresh(self):
+        """
+        Update stale values
+        """
+        pass
 
 class Buzzer(Device):
 
