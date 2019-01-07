@@ -19,12 +19,14 @@ np.random.seed(433937620)
 
 
 class TestFizzer(ut.TestCase):
+    """
+    Basic functionality testing for Fizzer class. Make sure that each of the
+    basic methods is not obviously broken.
+    """
 
     def setUp(self):
         # Set up a fizzer with time constant 10 seconds
         self.f = dummy_devices.Fizzer(time_const_sec=10)
-        # Set up a fizzmeter
-        self.fm = dummy_devices.Fizzmeter(response_delay=0.1)
         # Error tolerance
         self.epsilon = 0.001
 
@@ -60,6 +62,38 @@ class TestFizzer(ut.TestCase):
         fizziness = self.f.get_fizziness()
         slope = fizziness/dc
         self.assertLess(abs(1 - slope), self.epsilon)
+
+    def test_fizziness_saturation(self):
+        dc = 1e6
+        self.f.carbonation = dc
+        fizziness = self.f.get_fizziness()
+        self.assertLess(abs(1 - fizziness), self.epsilon)
+
+
+class TestFizzmeter(ut.TestCase):
+    """
+    Basic functionality test for the Fizzmeter class. Make sure that each of
+    the basic methods is not obviously broken.
+    """
+
+    def setUp(self):
+        # Set up a fizzer with time constant 10 seconds
+        self.f = dummy_devices.Fizzer(time_const_sec=10)
+        # Set up a fizzmeter
+        self.fm = dummy_devices.Fizzmeter(response_delay=0.0)
+        # Error tolerance
+        self.epsilon = 0.001
+
+    def test_measure(self):
+        """
+        This one is super hacky and probably not a very reliable/solid test.
+        """
+        for i in range(5):
+            time.sleep(0.2)
+            fizziness = self.f.get_fizziness()
+            measured_fizz = self.fm.measure(self.f)
+            self.assertLess(abs(fizziness - measured_fizz),
+                            (15*np.sqrt((i + 1)))*self.epsilon)
 
 
 if __name__ == '__main__':

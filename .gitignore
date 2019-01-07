@@ -4,6 +4,10 @@
 todo*
 TODO*
 
+# Testing database files
+debug_data
+.startdb
+
 # Python virtual environment
 env
 pyenv

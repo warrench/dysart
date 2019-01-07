@@ -16,6 +16,7 @@ import operator
 # building in fit_spectrum. DRY it out!
 # TODO: SpectrumModel constructor is ugly.
 # TODO: spectrum_fit is really quite slow.
+# TODO: this actually can be rewritten more intelligently.
 # Make the guessing functions the guess method of the SpectrumModel class.
 
 # Global definitions

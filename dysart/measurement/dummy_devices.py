@@ -70,7 +70,7 @@ class Fizzer(Device):
         """
         Fizziness is some function of carbonation that's linear at low levels,
         and saturates to 1 ("most fizzy!") at high carbonation. This is not
-        a physically or chemically accurate model.
+        a physically or chemically accurate model.j
         """
         carbonation = self.get_carbonation()
         fizziness = shifted_logistic(carbonation)
@@ -83,12 +83,11 @@ class Fizzmeter(Device):
     decal_rate parameter, which must be routinely calibrated away.
     """
 
-    def __init__(self, response_delay=0.5, uncertainty=0.1, decal_rate_days=1):
+    def __init__(self, response_delay=0.5, uncertainty=0.0001, decal_time_sec=1000):
         self.response_delay = response_delay
         self.uncertainty = uncertainty
         self.bias = 0
-        decal_rate_sec = decal_rate_days * day_sec
-        super().__init__(decal_rate_sec)
+        super().__init__(decal_rate=1/decal_time_sec)
 
     def refresh(self):
         """
@@ -96,7 +95,7 @@ class Fizzmeter(Device):
         """
         t_new = time.time()
         dt = t_new - self.cal_time
-        self.bias += np.random.normal(0, dt * self.decal_rate)
+        self.bias += np.random.normal(0, np.sqrt(dt * self.decal_rate))
         super().refresh(t_new)
 
     def measure(self, fizzer):
@@ -106,7 +105,6 @@ class Fizzmeter(Device):
         """
         time.sleep(self.response_delay)
         self.refresh()
-
         noise = np.random.normal(0, self.uncertainty)
         return fizzer.get_fizziness() + self.bias + noise
 

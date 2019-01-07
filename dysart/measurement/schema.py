@@ -1,40 +1,19 @@
-# TODO: Get to this later. This is at least a week or two down the line. Currently
-# untested, undocumented, and 98% feature-incomplete.
 
 
 class Feature:
     """
-
-    Args:
-        cal_func (type): Description of parameter `cal_func`.
-
-    Attributes:
-        cal_func
-
     """
 
     def __init__(self, cal_func=(lambda: None)):
         self.cal = cal_func
         self.handle = handle_func
-        self.__calibrated = False
+        self.calibrated = False
 
     def set_parents(*parents):
-        self.__parents = set(parents)
-        # Add self to children of new parents
-
-    @property
-    def parents(self):
-        return self.__parents
-
-    @property
-    def children(self):
-        # TODO
-        # Philosophy: y = parent(x) -> x = child(y), but x = child(y) -/> y = parent(x)
-        pass
-
-    @property
-    def is_calibrated():
-        return self.__calibrated
+        self.parents = set(parents)
+        # Add self to children of new parent
+        for parent in self.parents:
+            parent.children.add(self)
 
     def flag_uncalibrated(self):
         for child in self.children():
@@ -58,7 +37,11 @@ class FeatureDag:
         # TODO
         pass
 
-    def recursive_cal(feature, **kwargs):
+    def is_connected(self):
+        # TODO
+        pass
+
+    def recursive_call(feature, **kwargs):
         # Possibly log things that could change for the benefit of self.handle.
         # We don't want to lose all our
 
