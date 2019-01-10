@@ -7,12 +7,14 @@ is pretty handy for a demonstration like this.
 """
 
 from dummy_lab import *
-from dummy_devices import *
-# Use mongoengine, MongoDB's ODM ("Object-Document Mapper"), which is something
-# like an ORM for a document-based noSQL database. This doesn't let me easily
-# implement all the features I would like, including VCS-like stage/commit
-# and branching of configuration changes, but the high-level API is good enough
-# for a crude proof of principle, which this script is.
+from dummy_drivers import *
+"""
+Use mongoengine, MongoDB's ODM ("Object-Document Mapper"), which is something
+like an ORM for a document-based noSQL database. This doesn't let me easily
+implement all the features I would like, including VCS-like stage/commit
+and branching of configuration changes, but the high-level API is good enough
+for a crude proof of principle, which this script is.
+"""
 from mongoengine import *
 
 # Open a connection to the Mongo database
@@ -20,38 +22,40 @@ host_data = ('localhost', 27017)
 connect('dummy_db', host=host_data[0], port=host_data[1])
 
 #####################################
-# Set up the "physical" lab devices #
+# set up the "physical" lab devices #
 #####################################
 
 print('Setting up the lab... ', end='')
 
 # Fizzers
-p_fizzer_1 = P_Fizzer(time_const_sec=1)
-p_fizzer_2 = P_Fizzer(time_const_sec=10)
+fizzer_1 = Fizzer(time_const_sec=1)
+fizzer_2 = Fizzer(time_const_sec=10)
 
 # A fizzmeter
-p_fizzmeter = P_Fizzmeter(uncertainty=0.05)
+fizzmeter_1 = Fizzmeter(uncertainty=0.05)
+fizzmeter_2 = Fizzmeter(uncertainty=0.1)
 
 # A carbonator
-p_carbonator = P_Fizzmeter(uncertainty=0.1)
+carbonator = Fizzmeter(uncertainty=0.1)
+
+# Put the fizzers into the fizzmeters
+fizzmeter_1.attach_fizzer(fizzer_1)
+fizzmeter_1.attach_fizzer(fizzer_2)
 
 print('Done.')
 
 ####################################
-# Set up the "virtual" lab devices #
+# set up the "virtual" lab devices #
 ####################################
 
 print('Creating virtual devices... ', end='')
 
-# Fizzers
-fizzer_1 = Fizzer()
-fizzer_2 = Fizzer()
-
 # A Fizzmeter
-fizzmeter = Fizzmeter()
+fizzmeter_driver_1 = FizzmeterDriver()
+fizzmeter_driver_2 = FizzmeterDriver()
 
 # A carbonator
-carbonator = Carbonator()
+carbonator_driver = CarbonatorDriver()
 
 print('Done.')
 
@@ -61,15 +65,12 @@ print('Done.')
 
 print('Connecting virtual devices to lab... ', end='')
 
-# Fizzers
-fizzer_1.connect(p_fizzer_1)
-fizzer_2.connect(p_fizzer_2)
-
-# Fizzmeter
-fizzmeter.connect(p_fizzmeter)
+# Fizzmeters
+fizzmeter_driver_1.connect(fizzmeter_1)
+fizzmeter_driver_2.connect(fizzmeter_2)
 
 # Carbonator
-carbonator.connect(p_carbonator)
+carbonator_driver.connect(carbonator)
 
 print('Done.')
 
@@ -77,9 +78,92 @@ print('Done.')
 # Build feature tree #
 ######################
 
-# print('Building feature tree...', end='')
+"""
+The simple feature-tree structure we'll be using for this example has the
+following structure (inheritance goes top to bottom):
 
-# print('Done.')
+                         fizzmeter i calibration
+                           /              |
+                          /               |
+             carbonator calibration       |
+                          \               |
+                           \              |
+                         fizzer i time constant
+"""
+
+print('Building feature tree...', end='')
+
+"""
+This is a lot of boilerplate even for a simple system!
+"""
+
+# Fizzer time constants
+fizzer_1_time_const = Feature()
+fizzer_1_time_const.dependencies = set({})
+fizzer_1_time_const.fizzmeter_driver = fizzmeter_driver_1
+
+fizzer_2_time_const = Feature()
+fizzer_2_time_const.dependencies = set({})
+fizzer_2_time_const.fizzmeter_driver = fizzmeter_driver_2
+
+# Fizzmeter calibration and uncertainty
+fizzmeter_1_cal = Feature()
+fizzmeter_1_cal.dependencies = set({})
+fizzmeter_1_cal.fizzmeter_driver = fizzmeter_driver_1
+fizzmeter_1_unc = Feature()
+fizzmeter_1_unc.dependencies = set({})
+fizzmeter_1_unc.fizzmeter_driver = fizzmeter_driver_1
+
+fizzmeter_2_cal = Feature()
+fizzmeter_2_cal.dependencies = set({})
+fizzmeter_2_cal.fizzmeter_driver = fizzmeter_driver_2
+fizzmeter_2_unc = Feature()
+fizzmeter_2_unc.dependencies = set({})
+fizzmeter_2_unc.fizzmeter_driver = fizzmeter_driver_2
+
+# Carbonator calibration and uncertainty
+carbonator_cal = Feature()
+carbonator_cal.dependencies = set({})
+carbonator_cal.carbonator_driver = carbonator_driver
+carbonator_unc = Feature()
+carbonator_unc.dependencies = set({})
+carbonator_unc.carbonator_driver = carbonator_driver
+
+# set dependencies
+fizzer_1_time_const.dependencies.add(fizzmeter_1_cal)
+fizzer_1_time_const.dependencies.add(carbonator_cal)
+
+fizzer_1_time_const.dependencies.add(fizzmeter_2_cal)
+fizzer_1_time_const.dependencies.add(carbonator_cal)
+
+carbonator_cal.dependencies.add(fizzmeter_1_cal)
+carbonator_cal.dependencies.add(fizzmeter_2_cal)
+
+# set staleness policies
+fizzer_1_time_const.is_stale_func = 'self.dependencies_stale'
+fizzer_2_time_const.is_stale_func = 'self.dependencies_stale'
+
+fizzmeter_1_cal.is_stale_func = 'self.aged_out'
+fizzmeter_1_cal.time_out = datetime.timedelta(seconds=
+    1 / fizzmeter_1_cal.fizzmeter_driver.fizzmeter.decal_rate
+)
+fizzmeter_2_cal.is_stale_func = 'self.aged_out'
+fizzmeter_2_cal.time_out = datetime.timedelta(seconds=
+    1 / fizzmeter_2_cal.fizzmeter_driver.fizzmeter.decal_rate
+)
+
+carbonator_cal.is_stale_func = 'self.dependencies_stale'
+
+# set refresh policies
+fizzer_1_time_const.refresh_func = 'self.refresh_dependencies'
+fizzer_2_time_const.refresh_func = 'self.refresh_dependencies'
+
+carbonator_cal.refresh_func = 'self.refresh_dependencies'
+
+fizzmeter_1_cal.refresh_func = 'fizzmeter_driver_1.calibrate'
+fizzmeter_2_cal.refresh_func = 'fizzmeter_driver_2.calibrate'
+
+print('Done.')
 
 ########################
 # Do some measurements #

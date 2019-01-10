@@ -15,7 +15,7 @@ def shifted_logistic(x):
     return 2 / (1 + np.exp(-2 * x)) - 1
 
 
-class P_Device:
+class Device:
 
     def __init__(self, decal_rate=1e-3, cal_delay=1):
         """
@@ -25,7 +25,7 @@ class P_Device:
         self.decal_rate = decal_rate  # Decalibration rate in 1/second
         self.cal_delay = cal_delay
         # Call base-class refresh without ambiguity
-        P_Device.refresh(self, time.time())
+        Device.refresh(self, time.time())
 
     def refresh(self, t_new):
         """
@@ -34,7 +34,7 @@ class P_Device:
         self.cal_time = t_new
 
 
-class P_Fizzer(P_Device):
+class Fizzer(Device):
     """
     A cool glass of fizzy substance. Maintains carbonation level and fizziness,
     updating every time a public method is called.
@@ -44,6 +44,7 @@ class P_Fizzer(P_Device):
         """
         Initializes Fizzer with time constant 1 day
         """
+        self.fizzmeter = None
         self.carbonation = carbonation
         self.time_const_sec = time_const_sec
         super().__init__()
@@ -77,18 +78,20 @@ class P_Fizzer(P_Device):
         return fizziness
 
 
-class P_Fizzmeter(P_Device):
+class Fizzmeter(Device):
     """
     Measures the fizziness of a Fizzer. Measurement bias is controlled by
     decal_rate parameter, which must be routinely calibrated away.
     """
 
-    def __init__(self, response_delay=0.5, uncertainty=0.0001,
+    def __init__(self, response_delay=0.25, uncertainty=0.0001,
                  decal_time_sec=1000):
+        self.fizzer = None
+        self.measurements = []
         self.response_delay = response_delay
         self.uncertainty = uncertainty
         self.bias = 0
-        super().__init__(decal_rate=1/decal_time_sec)
+        super().__init__(decal_rate=1 / decal_time_sec)
 
     def refresh(self):
         """
@@ -99,15 +102,42 @@ class P_Fizzmeter(P_Device):
         self.bias += np.random.normal(0, np.sqrt(dt * self.decal_rate))
         super().refresh(t_new)
 
-    def measure(self, fizzer):
+    def attach_fizzer(self, fizzer):
         """
-        Returns the fizziness of a Fizzer, delayed by response time, plus added
-        noise.
+        Put a fizzer into the fizzmeter to measure it!
+        Return error code 1 if fizzer is in another fizzmeter.
         """
+        if fizzer.fizzmeter is not None:
+            return 1
+        if self.fizzer is not None:
+            self.fizzer.fizzmeter = None
+            self.fizzer = fizzer
+            self.fizzer.fizzmeter = self
+        return 0
+
+    def remove_fizzer(self):
+        """
+        Take out the fizzer. Return error code 1 if there is none.
+        """
+        if self.fizzer is None:
+            return 1
+        self.fizzer.fizzmeter = None
+        self.fizzer = None
+        return 0
+
+    def measure(self):
+        """
+        Adds the fizziness of a Fizzer to measurement list, delayed by response
+        time, plus added noise. Return error code 1 if there is no fizzer.
+        """
+        if self.fizzer is None:
+            return 1
         time.sleep(self.response_delay)
         self.refresh()
         noise = np.random.normal(0, self.uncertainty)
-        return fizzer.get_fizziness() + self.bias + noise
+        self.measurements.append(self.fizzer.get_fizziness() +
+                                 self.bias + noise)
+        return 0
 
     def calibrate(self):
         time.sleep(self.cal_delay)
@@ -115,7 +145,7 @@ class P_Fizzmeter(P_Device):
         self.refresh()
 
 
-class P_Carbonator(P_Device):
+class Carbonator(Device):
 
     def __init__(self, response_delay=0.5, uncertainty=0.01):
         super().__init__()
@@ -137,7 +167,7 @@ class P_Carbonator(P_Device):
         noise = np.random.normal(0, self.get_uncertainty())
 
 
-class P_Spinner(P_Device):
+class Spinner(Device):
 
     def __init__(self):
         super().__init__()
@@ -148,7 +178,8 @@ class P_Spinner(P_Device):
         """
         pass
 
-class P_Spinmeter(P_Device):
+
+class Spinmeter(Device):
 
     def __init__(self):
         super().__init__()
@@ -159,7 +190,8 @@ class P_Spinmeter(P_Device):
         """
         pass
 
-class P_Buzzer(P_Device):
+
+class Buzzer(Device):
 
     def __init__(self):
         pass
@@ -168,7 +200,7 @@ class P_Buzzer(P_Device):
         pass
 
 
-class P_Buzzmeter(P_Device):
+class Buzzmeter(Device):
 
     def __init__(self):
         pass
