@@ -1,173 +1,92 @@
 """
-Dummy device code for running and testing DySART measurement infrastructure.
-
-Defines classes Fizzer, Fizzmeter and Carbonator, which represent a carbonated
-liquid whose level of fizziness is monitored by a fizzmeter and controlled with
-a feedback system.
+Virtual device wrappers for the dummy lab. This is approximately how I imagine
+the DySART interface working in a final version, only better written!
 """
 
-import time
-import numpy as np
-day_sec = 60*60*24
+from mongoengine import *
+import datetime
+
+# Open a connection to the Mongo database
+host_data = ('localhost', 27017)
+connect('dummy_db', host=host_data[0], port=host_data[1])
+
+class Feature(Document):
+	"""
+	Device or component feature class. Each "measurement" should be implemented
+	as a an instance of such a class.
+	"""
+	meta = {'allow_inheritance': True}
+	name = StringField(required=True, max_length=40)
+	is_stale_func = StringField(max_length=40)
+	refresh_func = StringField(max_length=40)
+	dependencies = StringField()
+
+	def is_stale(self):
+		"""
+		A function implemented by the class instance
+		eval(self)
 
 
-def shifted_logistic(x):
-    return 2/(1 + np.exp(-2*x)) - 1
+class Device(Document):
+	meta = {'allow_inheritance': True}
+	timestamp = DateTimeField(default=datetime.datetime.now)
+	cal_func = StringField(max_length=40)
+	connect_func = StringField(max_length=40)
 
+	def cal(self):
+		"""
+		This method retrieves the name of the calibration function from the
+		database and executes that function. Each virtual device class should
+		implement a calibration function.
+		"""
+		getattr(self, self.cal_func)()
 
-class Device:
-
-    def __init__(self, decal_rate=1e-3, cal_delay=1):
-        """
-        Initializes device by setting decalibration rate in units/sqrt(second)
-        and setting the cal time by a refresh() call.
-        """
-        self.decal_rate = decal_rate  # Decalibration rate in 1/second
-        self.cal_delay = cal_delay
-        # Call base-class refresh without ambiguity
-        Device.refresh(self, time.time())
-
-    def refresh(self, t_new):
-        """
-        Resets the calibration time
-        """
-        self.cal_time = t_new
+	def connect(self, addr):
+		"""
+		This method retrieves the name of the connection function from the
+		database and executes that function. Each virtual device class should
+		implement a calibration function.
+		"""
+		getattr(self, self.connect_func)(addr)
 
 
 class Fizzer(Device):
-    """
-    A cool glass of fizzy substance. Maintains carbonation level and fizziness,
-    updating every time a public method is called.
-    """
+	carbonation = FloatField()
+	decal_rate = FloatField()
 
-    def __init__(self, carbonation=1, time_const_sec=1):
-        """
-        Initializes Fizzer with time constant 1 day
-        """
-        self.carbonation = carbonation
-        self.time_const_sec = time_const_sec
-        super().__init__()
+	def __init__(self):
+		super().__init__(cal_func='cal_func', connect_func='open_connection')
 
-    def refresh(self):
-        """
-        Update stale values
-        """
-        t_new = time.time()
-        dt = t_new - self.cal_time
-        carbonation = self.carbonation*np.exp(-dt/self.time_const_sec)
-        self.carbonation = carbonation
-        super().refresh(t_new)
+	def cal_func(self):
+		pass
 
-    def add_carbonation(self, carbonation):
-        self.carbonation += carbonation
-        self.refresh()
-
-    def get_carbonation(self):
-        self.refresh()
-        return self.carbonation
-
-    def get_fizziness(self):
-        """
-        Fizziness is some function of carbonation that's linear at low levels,
-        and saturates to 1 ("most fizzy!") at high carbonation. This is not
-        a physically or chemically accurate model.j
-        """
-        carbonation = self.get_carbonation()
-        fizziness = shifted_logistic(carbonation)
-        return fizziness
-
-
-class Fizzmeter(Device):
-    """
-    Measures the fizziness of a Fizzer. Measurement bias is controlled by
-    decal_rate parameter, which must be routinely calibrated away.
-    """
-
-    def __init__(self, response_delay=0.5, uncertainty=0.0001, decal_time_sec=1000):
-        self.response_delay = response_delay
-        self.uncertainty = uncertainty
-        self.bias = 0
-        super().__init__(decal_rate=1/decal_time_sec)
-
-    def refresh(self):
-        """
-        Update stale values
-        """
-        t_new = time.time()
-        dt = t_new - self.cal_time
-        self.bias += np.random.normal(0, np.sqrt(dt * self.decal_rate))
-        super().refresh(t_new)
-
-    def measure(self, fizzer):
-        """
-        Returns the fizziness of a Fizzer, delayed by response time, plus added
-        noise.
-        """
-        time.sleep(self.response_delay)
-        self.refresh()
-        noise = np.random.normal(0, self.uncertainty)
-        return fizzer.get_fizziness() + self.bias + noise
-
-    def calibrate(self):
-        time.sleep(self.cal_delay)
-        self.bias = 0
-        self.refresh()
+	def open_connection(self, addr):
+		self.p_fizzer = addr
 
 
 class Carbonator(Device):
+	uncertainty = FloatField()
 
-    def __init__(self, response_delay=0.5, uncertainty=0.01):
-        super().__init__()
-        self.response_delay = response_delay
-        self.uncertainty = uncertainty
+	def __init__(self, p_carbonator):
+		super().__init__(cal_func='cal_func', connect_func='open_connection')
+		self.p_caronator = p_carbonator
 
-    def refresh(self):
-        """
-        Update stale values
-        """
-        t_new = time.time()
-        super().refresh(t_new)
+	def cal_func(self):
+		pass
 
-    def get_uncertainty(self):
-        self.refresh()
-        return self.uncertainty
-
-    def carbonate(self, fizzer, carbonation):
-        noise = np.random.normal(0, self.get_uncertainty())
+	def open_connection(self, addr):
+		pass
 
 
-class Spinner(Device):
+class Fizzmeter(Device):
+	uncertainty = FloatField()
 
-    def __init__(self):
-        super().__init__()
+	def __init__(self, p_fizzmeter):
+		super().__init__(cal_func='cal_func', connect_func='open_connection')
+		self.p_fizzmeter = P_Fizzmeter
 
-    def refresh(self):
-        """
-        Update stale values
-        """
-        pass
+	def cal_func(self):
+		pass
 
-class Spinmeter(Device):
-
-    def __init__(self):
-        super().__init__()
-
-    def refresh(self):
-        """
-        Update stale values
-        """
-        pass
-
-class Buzzer(Device):
-
-    def __init__(self):
-        pass
-
-    def get_buzziness(self):
-        pass
-
-
-class BuzzMeter(Device):
-
-    def __init__(self):
-        pass
+	def open_connection(self, addr):
+		pass

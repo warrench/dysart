@@ -5,11 +5,11 @@ import numpy as np
 import matplotlib.pyplot as pyplot
 # Add modules to test
 import unittest as ut
-import dysart.measurement.dummy_devices as dummy_devices
+import dysart.measurement.dummy_lab as dummy_lab
 # Timing
 import time
 from timeit import timeit
-day_sec = 60*60*24
+day_sec = 60 * 60 * 24
 
 # Fixing random seed. There are a lot of pseudorandom tests in this module, so
 # it is essential that you take care to ensure that (a) there is no particular
@@ -26,7 +26,7 @@ class TestFizzer(ut.TestCase):
 
     def setUp(self):
         # Set up a fizzer with time constant 10 seconds
-        self.f = dummy_devices.Fizzer(time_const_sec=10)
+        self.f = dummy_lab.P_Fizzer(time_const_sec=10)
         # Error tolerance
         self.epsilon = 0.001
 
@@ -78,9 +78,9 @@ class TestFizzmeter(ut.TestCase):
 
     def setUp(self):
         # Set up a fizzer with time constant 10 seconds
-        self.f = dummy_devices.Fizzer(time_const_sec=10)
+        self.f = dummy_lab.P_Fizzer(time_const_sec=10)
         # Set up a fizzmeter
-        self.fm = dummy_devices.Fizzmeter(response_delay=0.0)
+        self.fm = dummy_lab.P_Fizzmeter(response_delay=0.0)
         # Error tolerance
         self.epsilon = 0.001
 
