@@ -1,0 +1,69 @@
+#!/bin/bash
+
+# Setup script to run mongodb server and activate
+# python environment. Runs mongodb on default
+# port (27017) in the default directory for dysart's
+# debug database (./debug_data/db)
+# 
+# Run `$. setup on` to start the debug database server
+# and python environment and `$. setup off` to turn
+# them off.
+
+DB_PATH=./debug_data/db
+LOG_PATH=./debug_data/log/mongodb.log
+PYENV_PATH=./pyenv/bin/activate
+
+function start {
+	if [[ ! -z $STARTED ]]; then
+		if [[ $STARTED -eq 1 ]]; then
+			echo "setup has already been run!"
+			return 0
+		fi
+	fi
+	source $PYENV_PATH
+	mongod --fork --logpath $LOG_PATH --dbpath $DB_PATH
+	export STARTED=1
+}
+
+function stop {
+	if [[ ! -z $STARTED ]] ; then
+		if [[ $STARTED -ne 0 ]]; then
+			mongod --shutdown --dbpath $DB_PATH
+			deactivate
+			export STARTED=0
+		fi
+	else
+		echo "setup has not already been run!"
+	fi
+}
+
+if [[ $# -ne 0 ]]; then
+	case $1 in
+		on)		start	;;
+		start)	start	;;
+		run)	start	;;
+		go)		start	;;
+		begin)	start	;;
+		
+		stop)	stop	;;
+		end)	stop	;;
+		quit)	stop	;;
+		exit)	stop	;;
+		finish)	stop	;;
+		done)	stop	;;
+		off) 	stop	;;		
+
+		*) echo "I don\'t understand that."	;;
+	esac
+else
+	if [[ ! -z $STARTED ]]; then
+		if [[ $STARTED -ne 1 ]]; then
+			start
+		elif [[ $STARTED -ne 0 ]]; then
+			stop
+		fi
+	else
+		start
+	fi
+fi
+
