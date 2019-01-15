@@ -56,14 +56,14 @@ function hard_clean {
 	ENV_MANAGER=`find_env_manager`
 	if [[ $ENV_MANAGER -eq $CONDA ]]; then
 		echo "About to delete python environment $PYENV_NAME."
-		read -p "Are you sure? [y/n] " DEL_INPUT
+		read -p "Are you sure ([y]/n)? " DEL_INPUT
 		if [[ $DEL_INPUT = "y" ]] ; then
 			conda env remove -n $PYENV_NAME
 		fi
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]]; then
 		PYENV_PATH=`pwd`/$PYENV_NAME
 		echo "About to recursively delete directory $PYENV_PATH"
-		read -p "Are you sure? [y/n] " DEL_INPUT
+		read -p "Are you sure ([y]/n)? " DEL_INPUT
 		if [[ $DEL_INPUT = "y" ]] ; then
 			rm -rf $PYENV_NAME
 		fi
@@ -73,7 +73,7 @@ function hard_clean {
 	# Remove database directory.
 	FULL_DB_PATH=`pwd`/$DB_NAME
 	echo "About to recursively delete directory $FULL_DB_PATH."
-	read -p "Are you sure? [y/n] " DEL_INPUT
+	read -p "Are you sure ([y]/n)? " DEL_INPUT
 	if [[ $DEL_INPUT = "y" ]] ; then
 		rm -rf $DB_NAME
 	fi
@@ -90,9 +90,10 @@ function install_requirements {
 	# previously used two different solutions for each
 	# manager, and a hint that I might again in the future.
 	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
+		# Assumes you are already in the environment!
 		eval "pip install $REQUIREMENTS"	
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
-		# Assuming you are already in the environment
+		# Assumes you are already in the environment!
 		eval "pip install $REQUIREMENTS"
 	else
 		echo "Unknown environment management tool. No packages to install."
@@ -109,12 +110,16 @@ function activate_env {
 		if [[ -z `conda info -e | grep $PYENV_NAME` ]] ; then
 			echo "Creating python environment..."		
 			conda create -y -n $1 python=$PYTHON_VERSION
-			echo "Installing requirements... "
+			# ...And activate the environment.
+			echo "Activating python environment..."
+			conda activate $1
+			echo "Installing dependencies... "
 			install_requirements $1
+		else
+			# ...And activate the environment.
+			echo "Activating python environment..."
+			conda activate $1
 		fi
-		# ...And activate the environment.
-		echo "Activating python environment..."
-		conda activate $1
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]]; then
 		if [[ ! -d $VIRTUALENV_PATH ]] ; then
 			echo "Creating python environment..."
@@ -188,6 +193,26 @@ function stop {
 	fi
 }
 
+function config_labber {
+	# Set up labber installation for use with python environment
+	# $1 is path to Labber installation
+	ENV_MANAGER=`find_env_manager`
+	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
+		# Get the full true path to the conda environment
+		FULL_ENV_PATH=`conda info -e | grep -o '/.*'$PYENV_NAME'$'`
+		#Unlink. Don't use ln -f because its behavior is noncanonical.
+		unlink $FULL_ENV_PATH/lib/python3.7/Labber
+		# Link the labber installation
+		ln -s $1/Script/Labber $FULL_ENV_PATH/lib/python3.7/Labber
+	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
+		unlink ./$PYENV_NAME/lib/python3.7/Labber
+		ln -s $1/Script/Labber ./$PYENV_NAME/lib/python3.7/Labber
+	else
+		echo "Unknown environment management tool."
+		echo "I'm not sure how to configure Labber."
+	fi
+}
+
 #####################
 # SETUP SCRIPT BODY #
 #####################
@@ -225,6 +250,8 @@ if [[ $# -ne 0 ]]; then
 
 		update)		install_requirements	;;
 		upgrate)	install_requirements	;;
+		labber) 	config_labber $2		;;
+		Labber)		config_labber $2		;;
 
 		*) echo "I don\'t understand that."	;;
 	esac

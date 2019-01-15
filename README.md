@@ -33,6 +33,12 @@ running on your machine, but exercise caution.
 very reliable. It might cause code regression, and I wouldn't trust it in a
 life-or-death situation. 
 
+* To make Labber's python API available to DySART, run `$ . config labber
+path/to/Labber` in the top-level directory. Caution: bad things _could_ happen
+if you run this from another working directory. This feature can also be used
+to update the location of a Labber installation that has been moved, to switch
+to a new Labber installation.
+
 * To perform a hard reset, run `$ . config clean`. This turns everything off,
 clears the database and uninstalls the python environment. Note that this
 feature is not strictly safe: if your working directory has similarly named
