@@ -1,0 +1,241 @@
+#!/bin/bash
+# author: mcncm
+#
+# Setup script to run mongodb server and activate
+# python environment. Runs mongodb on default
+# port (27017) in the default directory for dysart's
+# debug database (./debug_data/db)
+# 
+# Run `$. setup on` to start the debug database server
+# and python environment and `$. setup off` to turn
+# them off.
+#
+# TODO: handle --help, -v, -q flags
+
+DATETIME=`date '+%Y-%m-%d_%H:%M:%S'`
+DB_NAME=debug_data
+DB_PATH=./$DB_NAME/db
+LOG_PATH=./$DB_NAME/log
+LOG_FILE=mongodb_$DATETIME.log
+PYTHON_VERSION="3.7.1"
+PYENV_NAME=dysenv
+CONDA=1
+VIRTUALENV=2
+
+#TODO: retrieve this list externally!
+REQUIREMENTS={numpy,lmfit,pymongo,h5py,bson,jsonschema}
+
+
+function find_env_manager {
+	# Figure out how environments are managed.
+	# Return a code for each manager type, with
+	# preference from low to high.
+	# conda: 1
+	# virtualenv: 2	
+	
+	CONDA_VERSION=`conda -V`
+	VIRTUALENV_PATH=`which virtualenv`	
+
+	if [[ ! -z $CONDA_VERSION ]] ; then
+		ENV_MANAGER=$CONDA
+	elif [[ ! -z $VIRTUALENV_PATH ]] ; then
+		ENV_MANAGER=$VIRTUALENV
+	else
+		ENV_MANAGER=0
+	fi
+
+	echo $ENV_MANAGER 
+}
+
+function hard_clean {
+	# Figure out how environments are managed;
+	ENV_MANAGER=`find_env_manager`
+	# Shut everything off
+	stop
+	# Remove environment;
+	ENV_MANAGER=`find_env_manager`
+	if [[ $ENV_MANAGER -eq $CONDA ]]; then
+		echo "About to delete python environment $PYENV_NAME."
+		read -p "Are you sure? [y/n] " DEL_INPUT
+		if [[ $DEL_INPUT = "y" ]] ; then
+			conda env remove -n $PYENV_NAME
+		fi
+	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]]; then
+		PYENV_PATH=`pwd`/$PYENV_NAME
+		echo "About to recursively delete directory $PYENV_PATH"
+		read -p "Are you sure? [y/n] " DEL_INPUT
+		if [[ $DEL_INPUT = "y" ]] ; then
+			rm -rf $PYENV_NAME
+		fi
+	else
+		echo "Unknown environment management tool. No known environment."
+	fi
+	# Remove database directory.
+	FULL_DB_PATH=`pwd`/$DB_NAME
+	echo "About to recursively delete directory $FULL_DB_PATH."
+	read -p "Are you sure? [y/n] " DEL_INPUT
+	if [[ $DEL_INPUT = "y" ]] ; then
+		rm -rf $DB_NAME
+	fi
+}
+
+function install_requirements {
+	# Figure out how environments are managed;
+	# Locate an install all required packages.
+	# TODO: there are "correct" ways to do this
+	# for each environment management tool, and
+	# this is not one of them.
+	ENV_MANAGER=`find_env_manager`
+	# Note the redundancy here. This is because I
+	# previously used two different solutions for each
+	# manager, and a hint that I might again in the future.
+	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
+		eval "pip install $REQUIREMENTS"	
+	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
+		# Assuming you are already in the environment
+		eval "pip install $REQUIREMENTS"
+	else
+		echo "Unknown environment management tool. No packages to install."
+	fi
+}
+
+function activate_env {
+	# Figure out how environments are managed;
+	# Activate the correct environment.
+	ENV_MANAGER=`find_env_manager`
+	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
+		# Check whether Conda env exists. If not,
+		# make one!
+		if [[ -z `conda info -e | grep $PYENV_NAME` ]] ; then
+			echo "Creating python environment..."		
+			conda create -y -n $1 python=$PYTHON_VERSION
+			echo "Installing requirements... "
+			install_requirements $1
+		fi
+		# ...And activate the environment.
+		echo "Activating python environment..."
+		conda activate $1
+	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]]; then
+		if [[ ! -d $VIRTUALENV_PATH ]] ; then
+			echo "Creating python environment..."
+			virtualenv $1
+			# ...And activating the environment.
+			echo "Activating python environment..."
+			source ./$1/bin/activate
+			echo "Installing requirements..."
+			install_requirements $1
+		else
+			# Just activate the environment.
+			echo "Activating python environment..."
+			source ./$1/bin/activate
+		fi
+	else
+		echo "There appears to be no python \\
+		environment management tool installed.\n\
+		Try conda or virtualenv!"
+	fi
+}
+
+function deactivate_env {
+	# Figure out how environments are managedl
+	# Deactivate the correct environment.
+	ENV_MANAGER=`find_env_manager`
+	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
+		conda deactivate
+	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
+		deactivate
+	else
+		echo "There appears to be no python \\
+		environment management tool installed.\n\
+		Try conda or virtualenv!"
+	fi
+}
+
+function start_db {
+	# Run the mongodb database
+	echo "Starting database on default port... "
+	mongod --logpath $LOG_PATH/$LOG_FILE --dbpath $DB_PATH &
+	export MONGO_PID=$!
+}
+
+function start {
+	# Activate python environment; start db server
+	if [[ ! -z $STARTED ]]; then
+		if [[ $STARTED -eq 1 ]]; then
+			echo "Already on!"
+			return 0
+		fi
+	fi
+	activate_env $PYENV_NAME
+	start_db
+	export STARTED=1
+}
+
+function stop {
+	# Deactivate python environment; stop db server
+	if [[ ! -z $STARTED ]] ; then
+		if [[ $STARTED -ne 0 ]]; then
+			# This doesn't work with MacOS MongoDB
+			# mongod --shutdown --dbpath $DB_PATH
+			echo "Shutting down database server..."
+			kill $MONGO_PID
+			echo "Deactivating python environment..." 
+			deactivate_env
+			export STARTED=0
+		fi
+	else
+		echo "Already off!"
+	fi
+}
+
+#####################
+# SETUP SCRIPT BODY #
+#####################
+
+# If database location is missing, make it!
+if [[ ! -d $DB_PATH ]]; then
+	echo "Creating debug database..."
+	mkdir -p $DB_PATH
+fi
+
+# If database log is missing, make it!
+if [[ ! -d $LOG_PATH ]]; then
+	echo "Creating database log..."
+	mkdir -p $LOG_PATH
+fi
+
+# Parse input to enter python environment and start db server
+if [[ $# -ne 0 ]]; then
+	case $1 in
+		on)		start	;;
+		start)	start	;;
+		run)	start	;;
+		go)		start	;;
+		begin)	start	;;
+		
+		stop)	stop	;;
+		end)	stop	;;
+		quit)	stop	;;
+		exit)	stop	;;
+		finish)	stop	;;
+		done)	stop	;;
+		off) 	stop	;;		
+
+		clean)	hard_clean					;;
+
+		update)		install_requirements	;;
+		upgrate)	install_requirements	;;
+
+		*) echo "I don\'t understand that."	;;
+	esac
+else
+	if [[ ! -z $STARTED ]]; then
+		if [[ $STARTED -ne 1 ]]; then
+			start
+		elif [[ $STARTED -ne 0 ]]; then
+			stop
+		fi
+	else
+		start
+	fi
+fi
