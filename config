@@ -6,8 +6,8 @@
 # port (27017) in the default directory for dysart's
 # debug database (./debug_data/db)
 # 
-# Run `$. setup on` to start the debug database server
-# and python environment and `$. setup off` to turn
+# Run `$. config on` to start the debug database server
+# and python environment and `$. config off` to turn
 # them off.
 #
 # TODO: handle --help, -v, -q flags
