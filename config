@@ -17,7 +17,7 @@ DB_NAME=debug_data
 DB_PATH=./$DB_NAME/db
 LOG_PATH=./$DB_NAME/log
 LOG_FILE=mongodb_$DATETIME.log
-PYTHON_VERSION="3.7.1"
+PYTHON_VERSION="3.7"
 PYENV_NAME=dysenv
 CONDA=1
 VIRTUALENV=2
@@ -33,7 +33,7 @@ function find_env_manager {
 	# conda: 1
 	# virtualenv: 2	
 	
-	CONDA_VERSION=`conda -V`
+	CONDA_VERSION=`conda -V 2>/dev/null`
 	VIRTUALENV_PATH=`which virtualenv`	
 
 	if [[ ! -z $CONDA_VERSION ]] ; then
@@ -121,7 +121,7 @@ function activate_env {
 			conda activate $1
 		fi
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]]; then
-		if [[ ! -d $VIRTUALENV_PATH ]] ; then
+		if [[ ! -d $1 ]] ; then
 			echo "Creating python environment..."
 			virtualenv $1
 			# ...And activating the environment.
@@ -200,13 +200,20 @@ function config_labber {
 	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
 		# Get the full true path to the conda environment
 		FULL_ENV_PATH=`conda info -e | grep -o '/.*'$PYENV_NAME'$'`
-		#Unlink. Don't use ln -f because its behavior is noncanonical.
-		unlink $FULL_ENV_PATH/lib/python3.7/Labber
+		# Unlink. Don't use ln -f because its behavior is
+		# platform-dependent (?)
+		FULL_LINK_PATH=$FULL_ENV_PATH/lib/python$PYTHON_VERSION/Labber
+		if [[ ! -z `readlink $FULL_LINK_PATH` ]] ; then
+			unlink $FULL_LINK_PATH
+		fi
 		# Link the labber installation
-		ln -s $1/Script/Labber $FULL_ENV_PATH/lib/python3.7/Labber
+		ln -s $1/Script/Labber $FULL_LINK_PATH
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
-		unlink ./$PYENV_NAME/lib/python3.7/Labber
-		ln -s $1/Script/Labber ./$PYENV_NAME/lib/python3.7/Labber
+		FULL_LINK_PATH=./$PYENV_NAME/lib/python$PYTHON_VERSION/Labber
+		if [[ ! -z `readlink $FULL_LINK_PATH` ]] ; then
+			unlink $FULL_LINK_PATH
+		fi
+		ln -s $1/Script/Labber $FULL_LINK_PATH
 	else
 		echo "Unknown environment management tool."
 		echo "I'm not sure how to configure Labber."
@@ -253,7 +260,7 @@ if [[ $# -ne 0 ]]; then
 		labber) 	config_labber $2		;;
 		Labber)		config_labber $2		;;
 
-		*) echo "I don\'t understand that."	;;
+		*) echo "I don't understand that."	;;
 	esac
 else
 	if [[ ! -z $STARTED ]]; then
