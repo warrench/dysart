@@ -63,11 +63,15 @@ class TestFizzer(ut.TestCase):
         slope = fizziness/dc
         self.assertLess(abs(1 - slope), self.epsilon)
 
-    def test_fizziness_saturation(self):
-        dc = 1e6
-        self.f.carbonation = dc
-        fizziness = self.f.get_fizziness()
-        self.assertLess(abs(1 - fizziness), self.epsilon)
+####################
+# DEPRECATED TESTS #
+####################
+#
+#    def test_fizziness_saturation(self):
+#        dc = 1e6
+#        self.f.carbonation = dc
+#        fizziness = self.f.get_fizziness()
+#        self.assertLess(abs(1 - fizziness), self.epsilon)
 
 
 class TestFizzmeter(ut.TestCase):

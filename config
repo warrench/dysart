@@ -70,6 +70,7 @@ function clean_hard {
 	# Clear environment and database	
 	clean_env
 	clean_db
+	clean_log
 }
 
 function clean_env {

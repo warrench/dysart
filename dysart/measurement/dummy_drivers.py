@@ -29,18 +29,15 @@ class Feature(Document):
 	# structure of the payload is pretty constrained, and on top of that I
 	# don't really know how it is represented by the database.
 	# Hence "data" as a blob.
-	name = StringField(required=True, max_length=40)
+	name = StringField()
 	data = DictField()
 
 	# Time when last updated
 	timestamp = DateTimeField(default=datetime.now())
-	is_stale_func = StringField(max_length=40)
-	refresh_func = StringField(max_length=40)
+	is_stale_func = StringField(max_length=60)
+	refresh_func = StringField(max_length=60)
+	# deprecated?
 	# dependencies = StringField()
-
-	def __init__(self, **kwargs):
-		super().__init__()
-		self.__dict__.update(kwargs)
 
 	def is_stale(self):
 		"""
@@ -110,14 +107,22 @@ class FizzTimeConst(Feature):
 	FizzMeterDriver, self.fizzmeterdriver.
 	"""
 
+
+	data = DictField(default=
+						{
+						'fizziness': [],
+						'exp_fit_result': []
+						}
+					)
+
+	time_interval = FloatField()
+	n_data_points = IntField()
+
+
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)
-		self.refresh_func = FizzTimeConst.measure_time_const
-		self.is_stale_func = Feature.dependencies_stale
-
-		# Initialize data fields. (This might be a bug waiting to happen)
-		self.data['fizziness'] = []
-		self.data['exp_fit_result'] = []
+		self.refresh_func = 'FizzTimeConst.measure_time_const'
+		self.is_stale_func = 'Feature.dependencies_stale'
 
 	def measure_fizziness(self):
 		"""
@@ -126,7 +131,11 @@ class FizzTimeConst(Feature):
 		"""
 		self.fizzmeterdriver.measure()
 		fizziness = self.fizzmeterdriver.get_last_measurement()
-		self.data['fizziness'].append((datetime.now(), fizziness))
+		data_entry = (datetime.now(), fizziness)
+		if self.data['fizziness'] is None:
+			self.data['fizziness'] = [data_entry]
+		else:
+			self.data['fizziness'].append(data_entry)
 		return
 
 	def measure_time_const(self):
@@ -151,7 +160,8 @@ class FizzTimeConst(Feature):
 		'amplitude': fit_result.params['amplitude'].value
 		}
 
-		self.data['exp_fit_result'].append((datetime.now(), fit_result_dict))
+		data_entry = (datetime.now(), fit_result_dict)
+		self.data['exp_fit_result'].append(data_entry)
 
 		return
 

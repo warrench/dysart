@@ -103,33 +103,30 @@ This is a lot of boilerplate even for a simple system!
 # TODO: Why does name setting not work? Understand how update() func works.
 fizzer_1_time_const = FizzTimeConst(n_data_points=10,
                                     time_interval=0.1,
-                                    fizzmeterdriver=fizzmeter_driver_1,
                                     name='fizz-tc-1')
 fizzer_1_time_const.dependencies = set({})
-fizzer_1_time_const.fizzmeter_driver = fizzmeter_driver_1
+fizzer_1_time_const.fizzmeterdriver = fizzmeter_driver_1
 
 fizzer_2_time_const = FizzTimeConst(n_data_points=10,
                                     time_interval=0.2,
-                                    fizzmeterdriver=fizzmeter_driver_2,
                                     name='fizz-tc-2')
-
 fizzer_2_time_const.dependencies = set({})
-fizzer_2_time_const.fizzmeter_driver = fizzmeter_driver_2
+fizzer_2_time_const.fizzmeterdriver = fizzmeter_driver_2
 
 # Fizzmeter calibration and uncertainty
 fizzmeter_1_cal = Feature()
 fizzmeter_1_cal.dependencies = set({})
-fizzmeter_1_cal.fizzmeter_driver = fizzmeter_driver_1
+fizzmeter_1_cal.fizzmeterdriver = fizzmeter_driver_1
 fizzmeter_1_unc = Feature()
 fizzmeter_1_unc.dependencies = set({})
-fizzmeter_1_unc.fizzmeter_driver = fizzmeter_driver_1
+fizzmeter_1_unc.fizzmeterdriver = fizzmeter_driver_1
 
 fizzmeter_2_cal = Feature()
 fizzmeter_2_cal.dependencies = set({})
-fizzmeter_2_cal.fizzmeter_driver = fizzmeter_driver_2
+fizzmeter_2_cal.fizzmeterdriver = fizzmeter_driver_2
 fizzmeter_2_unc = Feature()
 fizzmeter_2_unc.dependencies = set({})
-fizzmeter_2_unc.fizzmeter_driver = fizzmeter_driver_2
+fizzmeter_2_unc.fizzmeterdriver = fizzmeter_driver_2
 
 # Carbonator calibration and uncertainty
 carbonator_cal = Feature()
@@ -155,11 +152,11 @@ fizzer_2_time_const.is_stale_func = 'self.dependencies_stale'
 
 fizzmeter_1_cal.is_stale_func = 'self.aged_out'
 fizzmeter_1_cal.age_out_time = timedelta(seconds=
-    1 / fizzmeter_1_cal.fizzmeter_driver.fizzmeter.decal_rate
+    1 / fizzmeter_1_cal.fizzmeterdriver.fizzmeter.decal_rate
 )
 fizzmeter_2_cal.is_stale_func = 'self.aged_out'
 fizzmeter_2_cal.age_out_time = timedelta(seconds=
-    1 / fizzmeter_2_cal.fizzmeter_driver.fizzmeter.decal_rate
+    1 / fizzmeter_2_cal.fizzmeterdriver.fizzmeter.decal_rate
 )
 
 carbonator_cal.is_stale_func = 'self.dependencies_stale'
