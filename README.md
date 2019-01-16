@@ -44,7 +44,18 @@ clears the database and uninstalls the python environment. Note that this
 feature is not strictly safe: if your working directory has similarly named
 subdirectories to `dysart/`, they might end up getting recursively deleted! You
 will be warned about this if you try to do it, but you're being warned about it
-here, too.
+here, too. You can do a more controlled clean with `$ . config clean env`, `$ .
+config clean log` or `$ . config clean db`, which wipe the python environment,
+database log, and whole database, respectively.
+
+## Tests
+There's a collection of tests in `dysart/tests` which should pass before every
+commit. They haven't been packaged up neatly yet with any more sophisticated
+testing tools, but can be run by hand with `$ python example_test.py`. If
+you're Conda on MacOS, you will need to install pythonw (e.g. by `$ conda install
+python.app`)` for the tests to run. Unforunately, I've been adding features
+faster than I've been adding tests, but generally a feature should not be
+considered stable until a test exists for it.
 
 ## Desiderata
 * Interface to existing Labber-based measurement tools

@@ -47,20 +47,41 @@ function find_env_manager {
 	echo $ENV_MANAGER 
 }
 
-function hard_clean {
-	# Figure out how environments are managed;
-	ENV_MANAGER=`find_env_manager`
+function clean {
+	# Parse inputs to clean commant and pass
+	# control to desired operation
+	if [[ -z $1 ]] ; then
+		clean_hard
+	else
+		case $1 in
+			hard)		clean_hard	;;
+			env)		clean_env	;;
+			db)			clean_db 	;;
+			database)	clean_db 	;;
+			log)		clean_log	;;
+			*)			echo "I don't understand that." ;;
+		esac
+	fi	 
+}
+
+function clean_hard {
 	# Shut everything off
 	stop
-	# Remove environment;
+	# Clear environment and database	
+	clean_env
+	clean_db
+}
+
+function clean_env {
+	# Delete python environment.
 	ENV_MANAGER=`find_env_manager`
-	if [[ $ENV_MANAGER -eq $CONDA ]]; then
+	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
 		echo "About to delete python environment $PYENV_NAME."
 		read -p "Are you sure ([y]/n)? " DEL_INPUT
 		if [[ $DEL_INPUT = "y" ]] ; then
 			conda env remove -n $PYENV_NAME
 		fi
-	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]]; then
+	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
 		PYENV_PATH=`pwd`/$PYENV_NAME
 		echo "About to recursively delete directory $PYENV_PATH"
 		read -p "Are you sure ([y]/n)? " DEL_INPUT
@@ -70,12 +91,29 @@ function hard_clean {
 	else
 		echo "Unknown environment management tool. No known environment."
 	fi
-	# Remove database directory.
-	FULL_DB_PATH=`pwd`/$DB_NAME
-	echo "About to recursively delete directory $FULL_DB_PATH."
+}
+
+function clean_db {
+	# Stop database server
+	stop_db	
+	# Empty database directory.
+	FULL_DB_PATH=`pwd`/$DB_NAME/db
+	echo "About to recursively empty directory $FULL_DB_PATH"
 	read -p "Are you sure ([y]/n)? " DEL_INPUT
 	if [[ $DEL_INPUT = "y" ]] ; then
-		rm -rf $DB_NAME
+		rm -rf $FULL_DB_PATH/*
+	fi
+}
+
+function clean_log {
+	# Stop database server
+	stop_db
+	# Empty log directory.
+	FULL_LOG_PATH=`pwd`/$DB_NAME/log
+	echo "About to recursively empty directory $FULL_LOG_PATH"
+	read -p "Are you sure ([y]/n)? " DEL_INPUT
+	if [[ $DEL_INPUT = 'y' ]] ; then
+		rm -rf $FULL_LOG_PATH/*
 	fi
 }
 
@@ -147,8 +185,10 @@ function deactivate_env {
 	# Deactivate the correct environment.
 	ENV_MANAGER=`find_env_manager`
 	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
+		echo "Deactivating python environment..." 
 		conda deactivate
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
+		echo "Deactivating python environment..." 
 		deactivate
 	else
 		echo "There appears to be no python \\
@@ -162,6 +202,15 @@ function start_db {
 	echo "Starting database on default port... "
 	mongod --logpath $LOG_PATH/$LOG_FILE --dbpath $DB_PATH &
 	export MONGO_PID=$!
+}
+
+function stop_db {
+	# This doesn't work with MacOS/MongoDB:
+	# mongod --shutdown --dbpath $DB_PATH
+	if [[ ! -z `ps | grep mongo` ]] ; then
+		echo "Shutting down database server..."
+		kill $MONGO_PID
+	fi
 }
 
 function start {
@@ -182,10 +231,7 @@ function stop {
 	if [[ ! -z $STARTED ]] ; then
 		if [[ $STARTED -ne 0 ]]; then
 			# This doesn't work with MacOS MongoDB
-			# mongod --shutdown --dbpath $DB_PATH
-			echo "Shutting down database server..."
-			kill $MONGO_PID
-			echo "Deactivating python environment..." 
+			stop_db
 			deactivate_env
 			export STARTED=0
 		fi
@@ -251,10 +297,9 @@ if [[ $# -ne 0 ]]; then
 		quit)	stop	;;
 		exit)	stop	;;
 		finish)	stop	;;
-		done)	stop	;;
 		off) 	stop	;;		
 
-		clean)	hard_clean					;;
+		clean)	clean $2					;;
 
 		update)		install_requirements	;;
 		upgrate)	install_requirements	;;
