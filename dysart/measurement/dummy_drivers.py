@@ -4,9 +4,10 @@ the DySART interface working in a final version "in spirit", only maybe written
 a little more cleanly!
 """
 
-from dysart.fitting.exponential import *
+from fitting.exponential import *
 from mongoengine import *
-import datetime
+from datetime import *
+import time
 
 # Open a connection to the Mongo database
 host_data = ('localhost', 27017)
@@ -32,10 +33,14 @@ class Feature(Document):
 	data = DictField()
 
 	# Time when last updated
-	timestamp = DateTimeField(default=datetime.datetime.now())
+	timestamp = DateTimeField(default=datetime.now())
 	is_stale_func = StringField(max_length=40)
 	refresh_func = StringField(max_length=40)
-	dependencies = StringField()
+	# dependencies = StringField()
+
+	def __init__(self, **kwargs):
+		super().__init__()
+		self.__dict__.update(kwargs)
 
 	def is_stale(self):
 		"""
@@ -67,9 +72,9 @@ class Feature(Document):
 		"""
 		Check whether timestamp is too old.
 		"""
-		t_now = datetime.datetime.now()
+		t_now = datetime.now()
 		delta_t = t_now - self.timestamp
-		return delta_t > self.time_out
+		return delta_t > self.age_out_time
 
 	def dependencies_stale(self):
 		"""
@@ -97,44 +102,71 @@ class Feature(Document):
 		for dep in self.dependencies:
 			if dep.is_stale():
 				dep.refresh()
-		self.timestamp = datetime.datetime.now()
+		self.timestamp = datetime.now()
 
+class FizzTimeConst(Feature):
+	"""
+	Feature class for  the time constant of a fizzer attached to an associated
+	FizzMeterDriver, self.fizzmeterdriver.
+	"""
+
+	def __init__(self, **kwargs):
+		super().__init__(**kwargs)
+		self.refresh_func = FizzTimeConst.measure_time_const
+		self.is_stale_func = Feature.dependencies_stale
+
+		# Initialize data fields. (This might be a bug waiting to happen)
+		self.data['fizziness'] = []
+		self.data['exp_fit_result'] = []
+
+	def measure_fizziness(self):
+		"""
+		Measures the fizziness of a fizzer and inserts it into the Feature's
+		record of fizziness measurements in self.data
+		"""
+		self.fizzmeterdriver.measure()
+		fizziness = self.fizzmeterdriver.get_last_measurement()
+		self.data['fizziness'].append((datetime.now(), fizziness))
+		return
+
+	def measure_time_const(self):
+		"""
+		Performs a sequence of fizziness measurements; retrieves the values
+		and fits the measured values to a decaying exponential. Records the
+		time constant in the Feature's data field.
+		"""
+		self.fizzmeterdriver.clear_measurements()
+		for i in range(1, self.n_data_points):
+				self.measure_fizziness()
+				time.sleep(self.time_interval)
+		meas_ = self.data['fizziness'][-self.n_data_points:]
+		# Times from start in seconds
+		x = np.array([(m[0] - meas_[0][0]).total_seconds() for m in meas_])
+		# Measured fizzinesses
+		y = np.array([m[1] for m in meas_])
+		fit_result = fit_exponential(x, y)
+
+		fit_result_dict = {
+		'decay': fit_result.params['decay'].value,
+		'amplitude': fit_result.params['amplitude'].value
+		}
+
+		self.data['exp_fit_result'].append((datetime.now(), fit_result_dict))
+
+		return
+
+	def get_time_const(self):
+		exp_fit_result = self.data['exp_fit_result']
+		# TODO: Should actually return the time constant.
+		return exp_fit_result[-1]
 
 class Device:
-	#meta = {'allow_inheritance': True}
-	#timestamp = DateTimeField(default=datetime.datetime.now())
-	#cal_func = StringField(max_length=40)
-	#connect_func = StringField(max_length=40)
-	#
-	#def cal(self):
-	#	"""
-	#	ibid
-	#	"""
-	#	getattr(self, self.cal_func)()
-	#
-	#def connect(self, addr):
-	#	"""
-	#	ibid
-	#	"""
-	#	getattr(self, self.connect_func)(addr)
+	"""
+	TODO: stub class
+	"""
 
 	def __init__(self):
 		pass
-
-
-#class Fizzer(Device):
-#	carbonation = FloatField()
-#	decal_rate = FloatField()
-#
-#	def __init__(self):
-#		super().__init__()
-#
-#	def cal_func(self):
-#		pass
-#
-#	def connect(self, addr):
-#		self.p_fizzer = addr
-#
 
 class CarbonatorDriver(Device):
 
@@ -167,8 +199,15 @@ class FizzmeterDriver(Device):
 		result = self.fizzmeter.measure()
 		return result
 
+	def clear_measurements(self):
+		self.fizzmeter.clear_measurements()
+		return
+
 	def get_measurement(self, i):
 		return self.fizzmeter.measurements[i]
+
+	def get_last_measurement(self):
+		return self.fizzmeter.measurements[-1]
 
 	def calibrate(self):
 		print("Calibrating fizzmeter... ", end="")

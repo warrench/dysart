@@ -5,7 +5,7 @@ system are present in at least some inchoate form. There's a lot of "printf
 debugging" in here, which may not conform to best practices in general, but it
 is pretty handy for a demonstration like this.
 """
-
+from datetime import *
 from dummy_lab import *
 from dummy_drivers import *
 """
@@ -32,15 +32,17 @@ fizzer_1 = Fizzer(time_const_sec=1)
 fizzer_2 = Fizzer(time_const_sec=10)
 
 # A fizzmeter
-fizzmeter_1 = Fizzmeter(uncertainty=0.05)
-fizzmeter_2 = Fizzmeter(uncertainty=0.1)
+fizzmeter_1 = Fizzmeter(uncertainty=0.05,
+                        response_delay=0)
+fizzmeter_2 = Fizzmeter(uncertainty=0.00,
+                        response_delay=0)
 
 # A carbonator
-carbonator = Fizzmeter(uncertainty=0.1)
+carbonator = Carbonator(uncertainty=0.1)
 
 # Put the fizzers into the fizzmeters
 fizzmeter_1.attach_fizzer(fizzer_1)
-fizzmeter_1.attach_fizzer(fizzer_2)
+fizzmeter_2.attach_fizzer(fizzer_2)
 
 print('Done.')
 
@@ -98,11 +100,19 @@ This is a lot of boilerplate even for a simple system!
 """
 
 # Fizzer time constants
-fizzer_1_time_const = Feature()
+# TODO: Why does name setting not work? Understand how update() func works.
+fizzer_1_time_const = FizzTimeConst(n_data_points=10,
+                                    time_interval=0.1,
+                                    fizzmeterdriver=fizzmeter_driver_1,
+                                    name='fizz-tc-1')
 fizzer_1_time_const.dependencies = set({})
 fizzer_1_time_const.fizzmeter_driver = fizzmeter_driver_1
 
-fizzer_2_time_const = Feature()
+fizzer_2_time_const = FizzTimeConst(n_data_points=10,
+                                    time_interval=0.2,
+                                    fizzmeterdriver=fizzmeter_driver_2,
+                                    name='fizz-tc-2')
+
 fizzer_2_time_const.dependencies = set({})
 fizzer_2_time_const.fizzmeter_driver = fizzmeter_driver_2
 
@@ -144,11 +154,11 @@ fizzer_1_time_const.is_stale_func = 'self.dependencies_stale'
 fizzer_2_time_const.is_stale_func = 'self.dependencies_stale'
 
 fizzmeter_1_cal.is_stale_func = 'self.aged_out'
-fizzmeter_1_cal.time_out = datetime.timedelta(seconds=
+fizzmeter_1_cal.age_out_time = timedelta(seconds=
     1 / fizzmeter_1_cal.fizzmeter_driver.fizzmeter.decal_rate
 )
 fizzmeter_2_cal.is_stale_func = 'self.aged_out'
-fizzmeter_2_cal.time_out = datetime.timedelta(seconds=
+fizzmeter_2_cal.age_out_time = timedelta(seconds=
     1 / fizzmeter_2_cal.fizzmeter_driver.fizzmeter.decal_rate
 )
 
@@ -168,3 +178,18 @@ print('Done.')
 ########################
 # Do some measurements #
 ########################
+
+print('Do some measurements... ', end='')
+fizzer_2_time_const.measure_time_const()
+print('Done.')
+tc = fizzer_2_time_const.data['exp_fit_result'][0][1]['decay']
+print('Fizzer 2 time constant is measured to be {} seconds.'.format(tc))
+
+########################
+# Save to the database #
+########################
+
+fizzer_2_time_const.name='fizz-tc-2'
+print('Saving result to database...', end='')
+fizzer_2_time_const.save()
+print('Done.')

@@ -40,7 +40,7 @@ class Fizzer(Device):
     updating every time a public method is called.
     """
 
-    def __init__(self, carbonation=1, time_const_sec=1):
+    def __init__(self, carbonation=1, time_const_sec=100):
         """
         Initializes Fizzer with time constant 1 day
         """
@@ -69,9 +69,15 @@ class Fizzer(Device):
 
     def get_fizziness(self):
         """
+        Identity fizziness curve
+        """
+        return self.get_carbonation()
+
+    def get_fizziness_logistic(self):
+        """
         Fizziness is some function of carbonation that's linear at low levels,
         and saturates to 1 ("most fizzy!") at high carbonation. This is not
-        a physically or chemically accurate model.j
+        a physically or chemically accurate model.
         """
         carbonation = self.get_carbonation()
         fizziness = shifted_logistic(carbonation)
@@ -99,20 +105,18 @@ class Fizzmeter(Device):
         """
         t_new = time.time()
         dt = t_new - self.cal_time
-        self.bias += np.random.normal(0, np.sqrt(dt * self.decal_rate))
+        self.bias += np.random.normal(0, dt * self.decal_rate)
         super().refresh(t_new)
 
     def attach_fizzer(self, fizzer):
         """
         Put a fizzer into the fizzmeter to measure it!
-        Return error code 1 if fizzer is in another fizzmeter.
+        Removes fizzer if it was in another fizzmeter.
         """
-        if fizzer.fizzmeter is not None:
-            return 1
         if self.fizzer is not None:
             self.fizzer.fizzmeter = None
-            self.fizzer = fizzer
-            self.fizzer.fizzmeter = self
+        self.fizzer = fizzer
+        self.fizzer.fizzmeter = self
         return 0
 
     def remove_fizzer(self):
@@ -135,9 +139,14 @@ class Fizzmeter(Device):
         time.sleep(self.response_delay)
         self.refresh()
         noise = np.random.normal(0, self.uncertainty)
-        self.measurements.append(self.fizzer.get_fizziness() +
-                                 self.bias + noise)
-        return 0
+        meas_result = self.fizzer.get_fizziness() + self.bias + noise
+        self.measurements.append(meas_result)
+
+    def clear_measurements(self):
+        """
+        Erases measurement memory
+        """
+        self.measurements = []
 
     def calibrate(self):
         time.sleep(self.cal_delay)

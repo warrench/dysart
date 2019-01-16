@@ -26,7 +26,7 @@ class TestFizzer(ut.TestCase):
 
     def setUp(self):
         # Set up a fizzer with time constant 10 seconds
-        self.f = dummy_lab.P_Fizzer(time_const_sec=10)
+        self.f = dummy_lab.Fizzer(time_const_sec=10)
         # Error tolerance
         self.epsilon = 0.001
 
@@ -78,9 +78,10 @@ class TestFizzmeter(ut.TestCase):
 
     def setUp(self):
         # Set up a fizzer with time constant 10 seconds
-        self.f = dummy_lab.P_Fizzer(time_const_sec=10)
+        self.f = dummy_lab.Fizzer(time_const_sec=10)
         # Set up a fizzmeter
-        self.fm = dummy_lab.P_Fizzmeter(response_delay=0.0)
+        self.fm = dummy_lab.Fizzmeter(response_delay=0.0)
+        self.fm.attach_fizzer(self.f)
         # Error tolerance
         self.epsilon = 0.001
 
@@ -91,9 +92,10 @@ class TestFizzmeter(ut.TestCase):
         for i in range(5):
             time.sleep(0.2)
             fizziness = self.f.get_fizziness()
-            measured_fizz = self.fm.measure(self.f)
-            self.assertLess(abs(fizziness - measured_fizz),
-                            (15*np.sqrt((i + 1)))*self.epsilon)
+            self.fm.measure()
+            print(self.fm.measurements[-1])
+            self.assertLess(abs(fizziness - self.fm.measurements[-1]),
+                                self.epsilon)
 
 
 if __name__ == '__main__':

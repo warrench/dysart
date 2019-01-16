@@ -4,7 +4,7 @@ import env
 import numpy as np
 # Add modules to test
 import unittest as ut
-import dysart.fitting.exponential as exponential
+import dysart.measurement.fitting.exponential as exponential
 
 
 class TestExponentialFittingFunctions(ut.TestCase):

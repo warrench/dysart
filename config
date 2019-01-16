@@ -23,8 +23,8 @@ CONDA=1
 VIRTUALENV=2
 
 #TODO: retrieve this list externally!
-REQUIREMENTS={numpy,lmfit,pymongo,h5py,bson,jsonschema}
-
+REQUIREMENTS={numpy,lmfit,pymongo,mongoengine,h5py,jsonschema,matplotlib}
+CONDA_REQUIREMENTS={python.app}
 
 function find_env_manager {
 	# Figure out how environments are managed.
@@ -92,6 +92,7 @@ function install_requirements {
 	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
 		# Assumes you are already in the environment!
 		eval "pip install $REQUIREMENTS"	
+		eval "pip install $CONDA_REQUIREMENTS"
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
 		# Assumes you are already in the environment!
 		eval "pip install $REQUIREMENTS"

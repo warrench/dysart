@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import Labber
 # Add modules to test
 import unittest as ut
-import dysart.fitting.spectra as spectra
+import dysart.measurement.fitting.spectra as spectra
 # Include sample data that is used
 
 # Timing
