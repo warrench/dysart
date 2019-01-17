@@ -16,7 +16,8 @@ DATETIME=`date '+%Y-%m-%d_%H:%M:%S'`
 DB_NAME=debug_data
 DB_PATH=./$DB_NAME/db
 LOG_PATH=./$DB_NAME/log
-LOG_FILE=mongodb_$DATETIME.log
+DB_LOG_FILE=mongodb_$DATETIME.log
+DYS_LOG_FILE=dysart.log
 PYTHON_VERSION="3.7"
 PYENV_NAME=dysenv
 CONDA=1
@@ -163,7 +164,7 @@ function activate_env {
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]]; then
 		if [[ ! -d $1 ]] ; then
 			echo "Creating python environment..."
-			virtualenv $1
+			virtualenv $1 --python=python/$PYTHON_VERSION
 			# ...And activating the environment.
 			echo "Activating python environment..."
 			source ./$1/bin/activate
@@ -201,7 +202,7 @@ function deactivate_env {
 function start_db {
 	# Run the mongodb database
 	echo "Starting database on default port... "
-	mongod --logpath $LOG_PATH/$LOG_FILE --dbpath $DB_PATH &
+	mongod --logpath $LOG_PATH/$DB_LOG_FILE --dbpath $DB_PATH &
 	export MONGO_PID=$!
 }
 
@@ -211,6 +212,13 @@ function stop_db {
 	if [[ ! -z `ps | grep mongo` ]] ; then
 		echo "Shutting down database server..."
 		kill $MONGO_PID
+	fi
+}
+
+function init_dys_log {
+	# If the DySART logfile doesn't exist, make it!
+	if [[ ! -f $LOG_PATH/$DYS_LOG_FILE ]] ; then
+		touch $LOG_PATH/$DYS_LOG_FILE
 	fi
 }
 
@@ -224,6 +232,7 @@ function start {
 	fi
 	activate_env $PYENV_NAME
 	start_db
+	init_dys_log
 	export STARTED=1
 }
 

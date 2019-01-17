@@ -6,8 +6,9 @@ a little more cleanly!
 
 from fitting.exponential import *
 from mongoengine import *
-from datetime import *
+import datetime as dt
 import time
+from messages import *
 
 # Open a connection to the Mongo database
 host_data = ('localhost', 27017)
@@ -33,7 +34,7 @@ class Feature(Document):
 	data = DictField()
 
 	# Time when last updated
-	timestamp = DateTimeField(default=datetime.now())
+	timestamp = DateTimeField(default=dt.datetime.now())
 	is_stale_func = StringField(max_length=60)
 	refresh_func = StringField(max_length=60)
 	# deprecated?
@@ -69,11 +70,11 @@ class Feature(Document):
 		"""
 		Check whether timestamp is too old.
 		"""
-		t_now = datetime.now()
+		t_now = dt.datetime.now()
 		delta_t = t_now - self.timestamp
 		return delta_t > self.age_out_time
 
-	def dependencies_stale(self):
+	def dependencies_stale(self, level=0):
 		"""
 		Recursively check whether dependencies have gone stale
 		"""
@@ -81,7 +82,7 @@ class Feature(Document):
 			if dep.is_stale():
 				return True
 
-	def dependencies_or_age(self):
+	def dependencies_or_age(self, level=0):
 		"""
 		Either dependencies have gone stale or it has aged out
 		"""
@@ -99,7 +100,7 @@ class Feature(Document):
 		for dep in self.dependencies:
 			if dep.is_stale():
 				dep.refresh()
-		self.timestamp = datetime.now()
+		self.timestamp = dt.datetime.now()
 
 class FizzTimeConst(Feature):
 	"""
@@ -124,29 +125,32 @@ class FizzTimeConst(Feature):
 		self.refresh_func = 'FizzTimeConst.measure_time_const'
 		self.is_stale_func = 'Feature.dependencies_stale'
 
-	def measure_fizziness(self):
+	def measure_fizziness(self, level=0):
 		"""
 		Measures the fizziness of a fizzer and inserts it into the Feature's
 		record of fizziness measurements in self.data
 		"""
+		msg2("measuring fizziness... ", level=level, end='')
 		self.fizzmeterdriver.measure()
 		fizziness = self.fizzmeterdriver.get_last_measurement()
-		data_entry = (datetime.now(), fizziness)
+		print("{:.3f}".format(fizziness))
+		data_entry = (dt.datetime.now(), fizziness)
 		if self.data['fizziness'] is None:
 			self.data['fizziness'] = [data_entry]
 		else:
 			self.data['fizziness'].append(data_entry)
 		return
 
-	def measure_time_const(self):
+	def measure_time_const(self, level=0):
 		"""
 		Performs a sequence of fizziness measurements; retrieves the values
 		and fits the measured values to a decaying exponential. Records the
 		time constant in the Feature's data field.
 		"""
+		msg1("measuring time constant.", level=level)
 		self.fizzmeterdriver.clear_measurements()
 		for i in range(1, self.n_data_points):
-				self.measure_fizziness()
+				self.measure_fizziness(level=level+1)
 				time.sleep(self.time_interval)
 		meas_ = self.data['fizziness'][-self.n_data_points:]
 		# Times from start in seconds
@@ -160,12 +164,12 @@ class FizzTimeConst(Feature):
 		'amplitude': fit_result.params['amplitude'].value
 		}
 
-		data_entry = (datetime.now(), fit_result_dict)
+		data_entry = (dt.datetime.now(), fit_result_dict)
 		self.data['exp_fit_result'].append(data_entry)
 
 		return
 
-	def get_time_const(self):
+	def get_time_const(self, level=0):
 		exp_fit_result = self.data['exp_fit_result']
 		# TODO: Should actually return the time constant.
 		return exp_fit_result[-1]

@@ -9,6 +9,9 @@ or as a more fully-featured system. This is something to feel out and discuss as
 and the lab workflow become more clear. The exact relationship to Labber and Labber Quantum is also an open
 question, but one probably not worth resolving until there is more substance here.
 
+Note that many features in this package depend on using python 3. The
+configuration script will attempt to use python 3.7.
+
 ## (Semi-)stable features
 
 ### Config script
@@ -19,9 +22,9 @@ development. Usage is as follows:
 on`. The script searches for a python environment management tool (currently,
 either conda or virtualenv) and initializes a new environment called `dysenv`
 (Make sure you don't already have an environment with this name!) and installs
-all dependencies that can be found on PyPI (currently, everything except for
-Labber). It also creates a directory  subtree for the debug database is one is
-not found.
+all dependencies that can be found on PyPI (Note to virtualenv users: tk will
+not be supported, and must be provied by your system's pyhton installation). 
+It also creates a directory  subtree for the debug database if one is not found.
 After the first usage, this command simply activates the environment and runs
 the database server.
 
@@ -48,14 +51,29 @@ here, too. You can do a more controlled clean with `$ . config clean env`, `$ .
 config clean log` or `$ . config clean db`, which wipe the python environment,
 database log, and whole database, respectively.
 
+### Dummy measurements
+The "dummy lab" in `dysart/measurements` provides a model of some of the
+desired end-state functionality. This virtual lab setting provides a collection
+of instruments and instrument controllers to take various measurements, and
+show how DySART writes the results to a database and logs its progress. For a
+brief demonstration, run `$ python dysart/measurement/dummy_measurement.py`.
+The progress of the experiments will be sent to stdout and the results saved to
+the MongoDB database at `debug_data/db`.
+
 ## Tests
 There's a collection of tests in `dysart/tests` which should pass before every
 commit. They haven't been packaged up neatly yet with any more sophisticated
 testing tools, but can be run by hand with `$ python example_test.py`. If
-you're Conda on MacOS, you will need to install pythonw (e.g. by `$ conda install
-python.app`)` for the tests to run. Unforunately, I've been adding features
-faster than I've been adding tests, but generally a feature should not be
-considered stable until a test exists for it.
+you're Conda on MacOS, you will need to install pythonw (e.g. by `$ conda
+install python.app`)` for the tests to run. Unforunately, I've been adding
+features faster than I've been adding tests, but generally a feature should not
+be considered stable until a test exists for it.
+
+## Incomplete and missing features.
+Windows support will almost certainly be necessary in the near future, and
+currently doesn't exist. In particular, the config script is written for bash,
+so the python environment and database will currently have to be configured
+manually on a Windows machine.
 
 ## Desiderata
 * Interface to existing Labber-based measurement tools

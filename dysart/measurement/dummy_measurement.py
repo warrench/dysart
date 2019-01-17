@@ -5,7 +5,7 @@ system are present in at least some inchoate form. There's a lot of "printf
 debugging" in here, which may not conform to best practices in general, but it
 is pretty handy for a demonstration like this.
 """
-from datetime import *
+import datetime as dt
 from dummy_lab import *
 from dummy_drivers import *
 """
@@ -151,11 +151,11 @@ fizzer_1_time_const.is_stale_func = 'self.dependencies_stale'
 fizzer_2_time_const.is_stale_func = 'self.dependencies_stale'
 
 fizzmeter_1_cal.is_stale_func = 'self.aged_out'
-fizzmeter_1_cal.age_out_time = timedelta(seconds=
+fizzmeter_1_cal.age_out_time = dt.timedelta(seconds=
     1 / fizzmeter_1_cal.fizzmeterdriver.fizzmeter.decal_rate
 )
 fizzmeter_2_cal.is_stale_func = 'self.aged_out'
-fizzmeter_2_cal.age_out_time = timedelta(seconds=
+fizzmeter_2_cal.age_out_time = dt.timedelta(seconds=
     1 / fizzmeter_2_cal.fizzmeterdriver.fizzmeter.decal_rate
 )
 
@@ -176,7 +176,7 @@ print('Done.')
 # Do some measurements #
 ########################
 
-print('Do some measurements... ', end='')
+print('Do some measurements... ')
 fizzer_2_time_const.measure_time_const()
 print('Done.')
 tc = fizzer_2_time_const.data['exp_fit_result'][0][1]['decay']
