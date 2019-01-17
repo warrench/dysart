@@ -1,6 +1,6 @@
 """
 A dummy playground to experiment and learn what doesn't work.
-Here, basically all the (futre) components (except, critically, Labber) of the
+Here, basically all the (future) components (except, critically, Labber) of the
 system are present in at least some inchoate form. There's a lot of "printf
 debugging" in here, which may not conform to best practices in general, but it
 is pretty handy for a demonstration like this.
@@ -58,7 +58,7 @@ print('Creating virtual devices... ', end='')
 
 # A Fizzmeter
 fizzmeter_driver_1 = FizzmeterDriver(name='fizz-d-1')
-fizzmeter_driver_2 = FizzmeterDriver(name='fizz-d-1')
+fizzmeter_driver_2 = FizzmeterDriver(name='fizz-d-2')
 
 # A carbonator
 carbonator_driver = CarbonatorDriver()
@@ -105,6 +105,7 @@ This is a lot of boilerplate even for a simple system!
 
 # Fizzer time constants
 # TODO: Why does name setting not work? Understand how update() func works.
+
 fizzer_1_time_const = FizzTimeConst(n_data_points=10,
                                     time_interval=0.1,
                                     name='fizz-tc-1')
@@ -114,65 +115,9 @@ fizzer_1_time_const.fizzmeterdriver = fizzmeter_driver_1
 fizzer_2_time_const = FizzTimeConst(n_data_points=10,
                                     time_interval=0.2,
                                     name='fizz-tc-2')
-fizzer_2_time_const.dependencies = set({fizzmeter_driver_1})
+fizzer_2_time_const.dependencies = set({fizzmeter_driver_2})
 fizzer_2_time_const.fizzmeterdriver = fizzmeter_driver_2
 
-# Fizzmeter calibration and uncertainty
-fizzmeter_1_cal = Feature()
-fizzmeter_1_cal.dependencies = set({fizzmeter_driver_1})
-fizzmeter_1_cal.fizzmeterdriver = fizzmeter_driver_1
-fizzmeter_1_unc = Feature()
-fizzmeter_1_unc.dependencies = set({fizzmeter_driver_2})
-fizzmeter_1_unc.fizzmeterdriver = fizzmeter_driver_1
-
-fizzmeter_2_cal = Feature()
-fizzmeter_2_cal.dependencies = set({})
-fizzmeter_2_cal.fizzmeterdriver = fizzmeter_driver_2
-fizzmeter_2_unc = Feature()
-fizzmeter_2_unc.dependencies = set({})
-fizzmeter_2_unc.fizzmeterdriver = fizzmeter_driver_2
-
-# Carbonator calibration and uncertainty
-carbonator_cal = Feature()
-carbonator_cal.dependencies = set({})
-carbonator_cal.carbonator_driver = carbonator_driver
-carbonator_unc = Feature()
-carbonator_unc.dependencies = set({})
-carbonator_unc.carbonator_driver = carbonator_driver
-
-# set dependencies
-fizzer_1_time_const.dependencies.add(fizzmeter_1_cal)
-fizzer_1_time_const.dependencies.add(carbonator_cal)
-
-fizzer_1_time_const.dependencies.add(fizzmeter_2_cal)
-fizzer_1_time_const.dependencies.add(carbonator_cal)
-
-carbonator_cal.dependencies.add(fizzmeter_1_cal)
-carbonator_cal.dependencies.add(fizzmeter_2_cal)
-
-# set staleness policies
-#fizzer_1_time_const.is_stale_func = 'self.dependencies_stale'
-#fizzer_2_time_const.is_stale_func = 'self.dependencies_stale'
-
-#fizzmeter_1_cal.is_stale_func = 'self.aged_out'
-fizzmeter_1_cal.age_out_time = dt.timedelta(seconds=
-    1 / fizzmeter_1_cal.fizzmeterdriver.fizzmeter.decal_rate
-)
-#fizzmeter_2_cal.is_stale_func = 'self.aged_out'
-fizzmeter_2_cal.age_out_time = dt.timedelta(seconds=
-    1 / fizzmeter_2_cal.fizzmeterdriver.fizzmeter.decal_rate
-)
-
-#carbonator_cal.is_stale_func = 'self.dependencies_stale'
-
-# set refresh policies
-#fizzer_1_time_const.refresh_func = 'self.refresh_dependencies'
-#fizzer_2_time_const.refresh_func = 'self.refresh_dependencies'
-
-#carbonator_cal.refresh_func = 'self.refresh_dependencies'
-
-#fizzmeter_1_cal.refresh_func = 'fizzmeter_driver_1.calibrate'
-#fizzmeter_2_cal.refresh_func = 'fizzmeter_driver_2.calibrate'
 
 print('Done.')
 
@@ -180,17 +125,20 @@ print('Done.')
 # Do some measurements #
 ########################
 
+# These are optional, and not part of the setup. If you're using this as a
+# notebook template, feel free to remove or edit them.
+
 print('Do some measurements... ')
 fizzer_2_time_const.measure_time_const()
 print('Done.')
-tc = fizzer_2_time_const.data['exp_fit_result'][0][1]['decay']
+tc = fizzer_2_time_const.get_time_const()
 print('Fizzer 2 time constant is measured to be {:.3f} seconds.'.format(tc))
 
 ########################
 # Save to the database #
 ########################
 
-fizzer_2_time_const.name='fizz-tc-2'
+#fizzer_2_time_const.name='fizz-tc-2'
 print('Saving result to database...', end='')
 fizzer_2_time_const.save()
 print('Done.')
