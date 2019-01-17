@@ -5,7 +5,7 @@
 # python environment. Runs mongodb on default
 # port (27017) in the default directory for dysart's
 # debug database (./debug_data/db)
-# 
+#
 # Run `$. config on` to start the debug database server
 # and python environment and `$. config off` to turn
 # them off.
@@ -32,10 +32,10 @@ function find_env_manager {
 	# Return a code for each manager type, with
 	# preference from low to high.
 	# conda: 1
-	# virtualenv: 2	
-	
+	# virtualenv: 2
+
 	CONDA_VERSION=`conda -V 2>/dev/null`
-	VIRTUALENV_PATH=`which virtualenv`	
+	VIRTUALENV_PATH=`which virtualenv`
 
 	if [[ ! -z $CONDA_VERSION ]] ; then
 		ENV_MANAGER=$CONDA
@@ -45,7 +45,7 @@ function find_env_manager {
 		ENV_MANAGER=0
 	fi
 
-	echo $ENV_MANAGER 
+	echo $ENV_MANAGER
 }
 function install_requirements {
 	# Figure out how environments are managed;
@@ -59,7 +59,7 @@ function install_requirements {
 	# manager, and a hint that I might again in the future.
 	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
 		# Assumes you are already in the environment!
-		eval "pip install $REQUIREMENTS"	
+		eval "pip install $REQUIREMENTS"
 		eval "conda install -y $CONDA_REQUIREMENTS"
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
 		# Assumes you are already in the environment!
@@ -77,7 +77,7 @@ function activate_env {
 		# Check whether Conda env exists. If not,
 		# make one!
 		if [[ -z `conda info -e | grep $PYENV_NAME` ]] ; then
-			echo "Creating python environment..."		
+			echo "Creating python environment..."
 			conda create -y -n $1 python=$PYTHON_VERSION
 			# ...And activate the environment.
 			echo "Activating python environment..."
@@ -92,7 +92,7 @@ function activate_env {
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]]; then
 		if [[ ! -d $1 ]] ; then
 			echo "Creating python environment..."
-			virtualenv $1 --python=python/$PYTHON_VERSION
+			virtualenv $1 --python=python$PYTHON_VERSION
 			# ...And activating the environment.
 			echo "Activating python environment..."
 			source ./$1/bin/activate
@@ -115,10 +115,10 @@ function deactivate_env {
 	# Deactivate the correct environment.
 	ENV_MANAGER=`find_env_manager`
 	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
-		echo "Deactivating python environment..." 
+		echo "Deactivating python environment..."
 		conda deactivate
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
-		echo "Deactivating python environment..." 
+		echo "Deactivating python environment..."
 		deactivate
 	else
 		echo "There appears to be no python \\
@@ -147,7 +147,7 @@ function start_db {
 		export MONGO_PID=$!
 	else
 		echo "Database already running."
-	fi	
+	fi
 }
 
 function stop_db {
@@ -211,13 +211,13 @@ function clean {
 			log)		clean_log	;;
 			*)			echo "I don't understand that." ;;
 		esac
-	fi	 
+	fi
 }
 
 function clean_hard {
 	# Shut everything off
 	stop
-	# Clear environment and database	
+	# Clear environment and database
 	clean_env
 	clean_db
 	clean_log
@@ -327,13 +327,13 @@ if [[ $# -ne 0 ]]; then
 		run)	start	;;
 		go)		start	;;
 		begin)	start	;;
-		
+
 		stop)	stop	;;
 		end)	stop	;;
 		quit)	stop	;;
 		exit)	stop	;;
 		finish)	stop	;;
-		off) 	stop	;;		
+		off) 	stop	;;
 
 		clean)	clean $2					;;
 

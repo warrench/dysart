@@ -108,7 +108,7 @@ This is a lot of boilerplate even for a simple system!
 fizzer_1_time_const = FizzTimeConst(n_data_points=10,
                                     time_interval=0.1,
                                     name='fizz-tc-1')
-fizzer_1_time_const.dependencies = set({})
+fizzer_1_time_const.dependencies = set({fizzmeter_driver_1})
 fizzer_1_time_const.fizzmeterdriver = fizzmeter_driver_1
 
 fizzer_2_time_const = FizzTimeConst(n_data_points=10,

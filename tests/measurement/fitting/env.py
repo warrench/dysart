@@ -9,4 +9,4 @@ sys.path.append(
 )
 
 # some constants, such as the location of sample data
-data_file_path = '../../sample_data/'
+data_file_path = '../../../sample_data/'
