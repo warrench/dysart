@@ -25,7 +25,7 @@ VIRTUALENV=2
 
 #TODO: retrieve this list externally!
 REQUIREMENTS={numpy,lmfit,pymongo,mongoengine,h5py,jsonschema,matplotlib}
-CONDA_REQUIREMENTS={python.app}
+CONDA_REQUIREMENTS={python.app,}
 
 function find_env_manager {
 	# Figure out how environments are managed.
@@ -47,78 +47,6 @@ function find_env_manager {
 
 	echo $ENV_MANAGER 
 }
-
-function clean {
-	# Parse inputs to clean commant and pass
-	# control to desired operation
-	if [[ -z $1 ]] ; then
-		clean_hard
-	else
-		case $1 in
-			hard)		clean_hard	;;
-			env)		clean_env	;;
-			db)			clean_db 	;;
-			database)	clean_db 	;;
-			log)		clean_log	;;
-			*)			echo "I don't understand that." ;;
-		esac
-	fi	 
-}
-
-function clean_hard {
-	# Shut everything off
-	stop
-	# Clear environment and database	
-	clean_env
-	clean_db
-	clean_log
-}
-
-function clean_env {
-	# Delete python environment.
-	ENV_MANAGER=`find_env_manager`
-	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
-		echo "About to delete python environment $PYENV_NAME."
-		read -p "Are you sure ([y]/n)? " DEL_INPUT
-		if [[ $DEL_INPUT = "y" ]] ; then
-			conda env remove -n $PYENV_NAME
-		fi
-	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
-		PYENV_PATH=`pwd`/$PYENV_NAME
-		echo "About to recursively delete directory $PYENV_PATH"
-		read -p "Are you sure ([y]/n)? " DEL_INPUT
-		if [[ $DEL_INPUT = "y" ]] ; then
-			rm -rf $PYENV_NAME
-		fi
-	else
-		echo "Unknown environment management tool. No known environment."
-	fi
-}
-
-function clean_db {
-	# Stop database server
-	stop_db	
-	# Empty database directory.
-	FULL_DB_PATH=`pwd`/$DB_NAME/db
-	echo "About to recursively empty directory $FULL_DB_PATH"
-	read -p "Are you sure ([y]/n)? " DEL_INPUT
-	if [[ $DEL_INPUT = "y" ]] ; then
-		rm -rf $FULL_DB_PATH/*
-	fi
-}
-
-function clean_log {
-	# Stop database server
-	stop_db
-	# Empty log directory.
-	FULL_LOG_PATH=`pwd`/$DB_NAME/log
-	echo "About to recursively empty directory $FULL_LOG_PATH"
-	read -p "Are you sure ([y]/n)? " DEL_INPUT
-	if [[ $DEL_INPUT = 'y' ]] ; then
-		rm -rf $FULL_LOG_PATH/*
-	fi
-}
-
 function install_requirements {
 	# Figure out how environments are managed;
 	# Locate an install all required packages.
@@ -132,7 +60,7 @@ function install_requirements {
 	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
 		# Assumes you are already in the environment!
 		eval "pip install $REQUIREMENTS"	
-		eval "pip install $CONDA_REQUIREMENTS"
+		eval "conda install -y $CONDA_REQUIREMENTS"
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
 		# Assumes you are already in the environment!
 		eval "pip install $REQUIREMENTS"
@@ -199,19 +127,38 @@ function deactivate_env {
 	fi
 }
 
+function db_running {
+	# Checks if database server is already running.
+	# Note the too-clever regex trick to filter out
+	# a real mongod process without grep catching itself.
+	if [[ ! -z `ps | grep "[m]ongo"` ]] ; then
+		DB_RUNNING=1
+	else
+		DB_RUNNING=0
+	fi
+}
+
 function start_db {
 	# Run the mongodb database
-	echo "Starting database on default port... "
-	mongod --logpath $LOG_PATH/$DB_LOG_FILE --dbpath $DB_PATH &
-	export MONGO_PID=$!
+	db_running
+	if [[ $DB_RUNNING -eq 0 ]] ; then
+		echo "Starting database on default port... "
+		mongod --logpath $LOG_PATH/$DB_LOG_FILE --dbpath $DB_PATH &
+		export MONGO_PID=$!
+	else
+		echo "Database already running."
+	fi	
 }
 
 function stop_db {
 	# This doesn't work with MacOS/MongoDB:
 	# mongod --shutdown --dbpath $DB_PATH
-	if [[ ! -z `ps | grep mongo` ]] ; then
+	db_running
+	if [[ $DB_RUNNING -eq 1 ]] ; then
 		echo "Shutting down database server..."
 		kill $MONGO_PID
+		# Temporary safety feature
+		sleep 1
 	fi
 }
 
@@ -249,6 +196,85 @@ function stop {
 		echo "Already off!"
 	fi
 }
+
+function clean {
+	# Parse inputs to clean commant and pass
+	# control to desired operation
+	if [[ -z $1 ]] ; then
+		clean_hard
+	else
+		case $1 in
+			hard)		clean_hard	;;
+			env)		clean_env	;;
+			db)			clean_db 	;;
+			database)	clean_db 	;;
+			log)		clean_log	;;
+			*)			echo "I don't understand that." ;;
+		esac
+	fi	 
+}
+
+function clean_hard {
+	# Shut everything off
+	stop
+	# Clear environment and database	
+	clean_env
+	clean_db
+	clean_log
+}
+
+function clean_env {
+	# Delete python environment.
+	ENV_MANAGER=`find_env_manager`
+	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
+		echo "About to delete python environment $PYENV_NAME."
+		read -p "Are you sure ([y]/n)? " DEL_INPUT
+		if [[ $DEL_INPUT = "y" ]] ; then
+			conda env remove -n $PYENV_NAME
+		fi
+	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
+		PYENV_PATH=`pwd`/$PYENV_NAME
+		echo "About to recursively delete directory $PYENV_PATH"
+		read -p "Are you sure ([y]/n)? " DEL_INPUT
+		if [[ $DEL_INPUT = "y" ]] ; then
+			rm -rf $PYENV_NAME
+		fi
+	else
+		echo "Unknown environment management tool. No known environment."
+	fi
+}
+
+function clean_db {
+	# Stop database server if necessary
+	db_running
+	if [[ $DB_RUNNING -eq 1 ]] ; then
+		stop_db
+	fi
+	# Empty database directory.
+	FULL_DB_PATH=`pwd`/$DB_NAME/db
+	echo "About to recursively empty directory $FULL_DB_PATH"
+	read -p "Are you sure ([y]/n)? " DEL_INPUT
+	if [[ $DEL_INPUT = "y" ]] ; then
+		rm -rf $FULL_DB_PATH/*
+	fi
+	# Restart database server if it was previously shut off
+	if [[ $DB_RUNNING -eq 1 ]] ; then
+		start_db
+	fi
+}
+
+function clean_log {
+	# Stop database server
+	stop_db
+	# Empty log directory.
+	FULL_LOG_PATH=`pwd`/$DB_NAME/log
+	echo "About to recursively empty directory $FULL_LOG_PATH"
+	read -p "Are you sure ([y]/n)? " DEL_INPUT
+	if [[ $DEL_INPUT = 'y' ]] ; then
+		rm -rf $FULL_LOG_PATH/*
+	fi
+}
+
 
 function config_labber {
 	# Set up labber installation for use with python environment

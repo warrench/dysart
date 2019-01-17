@@ -7,6 +7,7 @@ a feedback system.
 """
 
 import time
+import datetime as dt
 import numpy as np
 day_sec = 60 * 60 * 24
 
@@ -31,7 +32,7 @@ class Device:
         """
         Resets the calibration time
         """
-        self.cal_time = t_new
+        self.refresh_time = t_new
 
 
 class Fizzer(Device):
@@ -54,7 +55,7 @@ class Fizzer(Device):
         Update stale values
         """
         t_new = time.time()
-        dt = t_new - self.cal_time
+        dt = t_new - self.refresh_time
         carbonation = self.carbonation*np.exp(-dt/self.time_const_sec)
         self.carbonation = carbonation
         super().refresh(t_new)
@@ -91,21 +92,23 @@ class Fizzmeter(Device):
     """
 
     def __init__(self, response_delay=0.25, uncertainty=0.0001,
-                 decal_time_sec=1000):
+                 cal_delay=0, decal_time_sec=1000):
         self.fizzer = None
         self.measurements = []
         self.response_delay = response_delay
         self.uncertainty = uncertainty
-        self.bias = 0
+        self.cal_delay=cal_delay
+        self.decal_time_sec = decal_time_sec
         super().__init__(decal_rate=1 / decal_time_sec)
+        self.calibrate()
 
     def refresh(self):
         """
         Update stale values
         """
         t_new = time.time()
-        dt = t_new - self.cal_time
-        self.bias += np.random.normal(0, dt * self.decal_rate)
+        dt = t_new - self.refresh_time
+        self.bias += np.random.normal(0, np.sqrt(dt * self.decal_rate))
         super().refresh(t_new)
 
     def attach_fizzer(self, fizzer):
@@ -151,6 +154,7 @@ class Fizzmeter(Device):
     def calibrate(self):
         time.sleep(self.cal_delay)
         self.bias = 0
+        self.cal_time = dt.datetime.now()
         self.refresh()
 
 

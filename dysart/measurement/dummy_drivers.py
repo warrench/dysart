@@ -37,10 +37,8 @@ class Feature(Document):
 	timestamp = DateTimeField(default=dt.datetime.now())
 	is_stale_func = StringField(max_length=60)
 	refresh_func = StringField(max_length=60)
-	# deprecated?
-	# dependencies = StringField()
 
-	def is_stale(self):
+	def is_stale(self, level=0):
 		"""
 		A function implemented or provided by the instance. As written, this is
 		not a safe or robust way to do this at all, but it conveys the goal,
@@ -54,19 +52,19 @@ class Feature(Document):
 		Each of these has problems, and there's probably one that's better,
 		but this is a rough prototype, so it's ok for now.
 		"""
-		eval(self.is_stale_func + '()')
+		return eval(self.is_stale_func + '(self, level=level)')
 
-	def refresh(self):
+	def refresh(self, level=0):
 		"""
 		ibid
 		"""
-		eval(self.refresh_func + '()')
+		return eval(self.refresh_func + '(self, level=level)')
 
 	##############################
 	# `is_stale` implementations #
 	##############################
 
-	def aged_out(self):
+	def aged_out(self, level=0):
 		"""
 		Check whether timestamp is too old.
 		"""
@@ -79,28 +77,30 @@ class Feature(Document):
 		Recursively check whether dependencies have gone stale
 		"""
 		for dep in self.dependencies:
-			if dep.is_stale():
+			if dep.is_stale(level=level):
 				return True
+		return False
 
 	def dependencies_or_age(self, level=0):
 		"""
 		Either dependencies have gone stale or it has aged out
 		"""
-		return self.aged_out() or self.dependencies_stale()
+		return self.aged_out(level=level) or self.dependencies_stale(level=level)
 
 		#############################
 		# `refresh` implementations #
 		#############################
 
-	def refresh_dependencies(self):
+	def refresh_dependencies(self, level=0):
 		"""
 		Recursively refresh all dependencies and reset timestamp. Note how silly it
 		is that this traverses the whole tree already visited by dependencies_stale!
 		"""
 		for dep in self.dependencies:
-			if dep.is_stale():
-				dep.refresh()
+			if dep.is_stale(level=level):
+				dep.refresh(level=level)
 		self.timestamp = dt.datetime.now()
+
 
 class FizzTimeConst(Feature):
 	"""
@@ -108,22 +108,26 @@ class FizzTimeConst(Feature):
 	FizzMeterDriver, self.fizzmeterdriver.
 	"""
 
-
+	is_stale_func = StringField(default='Feature.dependencies_stale', max_length=60)
+	refresh_func = StringField(default='FizzTimeConst.refresh', max_length=60)
 	data = DictField(default=
 						{
-						'fizziness': [],
-						'exp_fit_result': []
+							'fizziness': [],
+							'exp_fit_result': []
 						}
 					)
-
 	time_interval = FloatField()
 	n_data_points = IntField()
 
 
-	def __init__(self, **kwargs):
-		super().__init__(**kwargs)
-		self.refresh_func = 'FizzTimeConst.measure_time_const'
-		self.is_stale_func = 'Feature.dependencies_stale'
+#	def __init__(self, **kwargs):
+#		super().__init__(**kwargs)
+#		self.refresh_func = 'FizzTimeConst.refresh'
+#		self.is_stale_func = 'Feature.dependencies_stale'
+
+	def refresh(self, level=0):
+		self.refresh_dependencies(level=level+1)
+		self.measure_time_const(level=level+1)
 
 	def measure_fizziness(self, level=0):
 		"""
@@ -149,7 +153,7 @@ class FizzTimeConst(Feature):
 		"""
 		msg1("measuring time constant.", level=level)
 		self.fizzmeterdriver.clear_measurements()
-		for i in range(1, self.n_data_points):
+		for _ in range(self.n_data_points):
 				self.measure_fizziness(level=level+1)
 				time.sleep(self.time_interval)
 		meas_ = self.data['fizziness'][-self.n_data_points:]
@@ -169,23 +173,14 @@ class FizzTimeConst(Feature):
 
 		return
 
-	def get_time_const(self, level=0):
-		exp_fit_result = self.data['exp_fit_result']
-		# TODO: Should actually return the time constant.
-		return exp_fit_result[-1]
+	def get_time_const(self):
+		msg1('getting time constant.', level=0)
+		if self.is_stale():
+				self.refresh(level=0)
+		return self.data['exp_fit_result'][-1][1]['decay']
 
-class Device:
-	"""
-	TODO: stub class
-	"""
 
-	def __init__(self):
-		pass
-
-class CarbonatorDriver(Device):
-
-	def __init__(self):
-		super().__init__()
+class CarbonatorDriver(Feature):
 
 	def cal_func(self):
 		pass
@@ -198,10 +193,28 @@ class CarbonatorDriver(Device):
 		return result
 
 
-class FizzmeterDriver(Device):
+class FizzmeterDriver(Feature):
+	"""
+	Controller for a Fizzmeter.
+	"""
 
-	def __init__(self):
-		super().__init__()
+	name = StringField()
+	timestamp = DateTimeField(default=dt.datetime.now())
+	is_stale_func = StringField(default='FizzmeterDriver.fizzmeter_uncalibrated', max_length=60)
+	refresh_func = StringField(default='FizzmeterDriver.calibrate', max_length=60)
+	decal_tolerance = 0.01
+
+	def fizzmeter_uncalibrated(self, level=0):
+		decal_time_sec = self.fizzmeter.decal_time_sec
+		cal_time = self.fizzmeter.cal_time
+		now_time = dt.datetime.now()
+		elapsed_time = (now_time - cal_time).total_seconds()
+		return elapsed_time > np.sqrt(decal_time_sec) * self.decal_tolerance
+
+	def calibrate(self, level=0):
+		msg1("calibrating fizzmeter.", level=level)
+		self.fizzmeter.calibrate()
+		self.timestamp = dt.datetime.now()
 
 	def cal_func(self):
 		pass
@@ -222,8 +235,3 @@ class FizzmeterDriver(Device):
 
 	def get_last_measurement(self):
 		return self.fizzmeter.measurements[-1]
-
-	def calibrate(self):
-		print("Calibrating fizzmeter... ", end="")
-		self.fizzmeter.calibrate()
-		print("Done.")

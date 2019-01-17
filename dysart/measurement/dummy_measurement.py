@@ -29,13 +29,17 @@ print('Setting up the lab... ', end='')
 
 # Fizzers
 fizzer_1 = Fizzer(time_const_sec=1)
-fizzer_2 = Fizzer(time_const_sec=10)
+fizzer_2 = Fizzer(time_const_sec=20)
 
 # A fizzmeter
 fizzmeter_1 = Fizzmeter(uncertainty=0.05,
-                        response_delay=0)
+                        response_delay=0,
+                        cal_delay=0,
+                        decal_time_sec=1000000)
 fizzmeter_2 = Fizzmeter(uncertainty=0.00,
-                        response_delay=0)
+                        response_delay=0,
+                        cal_delay=0,
+                        decal_time_sec=1000000)
 
 # A carbonator
 carbonator = Carbonator(uncertainty=0.1)
@@ -53,8 +57,8 @@ print('Done.')
 print('Creating virtual devices... ', end='')
 
 # A Fizzmeter
-fizzmeter_driver_1 = FizzmeterDriver()
-fizzmeter_driver_2 = FizzmeterDriver()
+fizzmeter_driver_1 = FizzmeterDriver(name='fizz-d-1')
+fizzmeter_driver_2 = FizzmeterDriver(name='fizz-d-1')
 
 # A carbonator
 carbonator_driver = CarbonatorDriver()
@@ -110,15 +114,15 @@ fizzer_1_time_const.fizzmeterdriver = fizzmeter_driver_1
 fizzer_2_time_const = FizzTimeConst(n_data_points=10,
                                     time_interval=0.2,
                                     name='fizz-tc-2')
-fizzer_2_time_const.dependencies = set({})
+fizzer_2_time_const.dependencies = set({fizzmeter_driver_1})
 fizzer_2_time_const.fizzmeterdriver = fizzmeter_driver_2
 
 # Fizzmeter calibration and uncertainty
 fizzmeter_1_cal = Feature()
-fizzmeter_1_cal.dependencies = set({})
+fizzmeter_1_cal.dependencies = set({fizzmeter_driver_1})
 fizzmeter_1_cal.fizzmeterdriver = fizzmeter_driver_1
 fizzmeter_1_unc = Feature()
-fizzmeter_1_unc.dependencies = set({})
+fizzmeter_1_unc.dependencies = set({fizzmeter_driver_2})
 fizzmeter_1_unc.fizzmeterdriver = fizzmeter_driver_1
 
 fizzmeter_2_cal = Feature()
@@ -147,28 +151,28 @@ carbonator_cal.dependencies.add(fizzmeter_1_cal)
 carbonator_cal.dependencies.add(fizzmeter_2_cal)
 
 # set staleness policies
-fizzer_1_time_const.is_stale_func = 'self.dependencies_stale'
-fizzer_2_time_const.is_stale_func = 'self.dependencies_stale'
+#fizzer_1_time_const.is_stale_func = 'self.dependencies_stale'
+#fizzer_2_time_const.is_stale_func = 'self.dependencies_stale'
 
-fizzmeter_1_cal.is_stale_func = 'self.aged_out'
+#fizzmeter_1_cal.is_stale_func = 'self.aged_out'
 fizzmeter_1_cal.age_out_time = dt.timedelta(seconds=
     1 / fizzmeter_1_cal.fizzmeterdriver.fizzmeter.decal_rate
 )
-fizzmeter_2_cal.is_stale_func = 'self.aged_out'
+#fizzmeter_2_cal.is_stale_func = 'self.aged_out'
 fizzmeter_2_cal.age_out_time = dt.timedelta(seconds=
     1 / fizzmeter_2_cal.fizzmeterdriver.fizzmeter.decal_rate
 )
 
-carbonator_cal.is_stale_func = 'self.dependencies_stale'
+#carbonator_cal.is_stale_func = 'self.dependencies_stale'
 
 # set refresh policies
-fizzer_1_time_const.refresh_func = 'self.refresh_dependencies'
-fizzer_2_time_const.refresh_func = 'self.refresh_dependencies'
+#fizzer_1_time_const.refresh_func = 'self.refresh_dependencies'
+#fizzer_2_time_const.refresh_func = 'self.refresh_dependencies'
 
-carbonator_cal.refresh_func = 'self.refresh_dependencies'
+#carbonator_cal.refresh_func = 'self.refresh_dependencies'
 
-fizzmeter_1_cal.refresh_func = 'fizzmeter_driver_1.calibrate'
-fizzmeter_2_cal.refresh_func = 'fizzmeter_driver_2.calibrate'
+#fizzmeter_1_cal.refresh_func = 'fizzmeter_driver_1.calibrate'
+#fizzmeter_2_cal.refresh_func = 'fizzmeter_driver_2.calibrate'
 
 print('Done.')
 
@@ -180,7 +184,7 @@ print('Do some measurements... ')
 fizzer_2_time_const.measure_time_const()
 print('Done.')
 tc = fizzer_2_time_const.data['exp_fit_result'][0][1]['decay']
-print('Fizzer 2 time constant is measured to be {} seconds.'.format(tc))
+print('Fizzer 2 time constant is measured to be {:.3f} seconds.'.format(tc))
 
 ########################
 # Save to the database #
