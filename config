@@ -22,6 +22,12 @@ PYTHON_VERSION="3.7"
 PYENV_NAME=dysenv
 CONDA=1
 VIRTUALENV=2
+DB_OFF=0
+DB_ON=1
+ENV_OFF=0
+ENV_ON=1
+ENV_NEXIST=100
+ENV_NO_MANAGER=101
 
 #TODO: retrieve this list externally!
 REQUIREMENTS={numpy,lmfit,pymongo,mongoengine,h5py,jsonschema,matplotlib}
@@ -127,21 +133,51 @@ function deactivate_env {
 	fi
 }
 
-function db_running {
+function env_get_status {
+	# Checks if the python environment is activated.
+	ENV_MANAGER=`find_env_manager`
+	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
+		if [[ ! -z `conda info -e | grep \*.*$PYENV_NAME` ]] ; then
+			ENV_STATUS=$ENV_ON
+		elif [[ -z `conda info -e | grep $PYENV_NAME` ]] ; then
+			ENV_STATUS=$ENV_NEXIST
+		else
+			ENV_STATUS=$ENV_OFF
+		fi
+	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
+		if [[ -d ./$PYENV_NAME ]] ; then
+			if [[ ! -z `echo $VIRTUAL_ENV | grep $PYENV_NAME` ]] ; then
+				ENV_STATUS=$ENV_ON
+			else
+				ENV_STATUS=$ENV_OFF
+			fi
+		else
+			ENV_STATUS=$ENV_NEXIST
+		fi	
+	else
+		ENV_STATUS=$ENV_NO_MANAGER
+	fi	
+
+	echo $ENV_STATUS
+}
+
+function db_get_status {
 	# Checks if database server is already running.
 	# Note the too-clever regex trick to filter out
 	# a real mongod process without grep catching itself.
 	if [[ ! -z `ps | grep "[m]ongo"` ]] ; then
-		DB_RUNNING=1
+		DB_STATUS=1
 	else
-		DB_RUNNING=0
+		DB_STATUS=0
 	fi
+	
+	echo $DB_STATUS
 }
 
 function start_db {
 	# Run the mongodb database
-	db_running
-	if [[ $DB_RUNNING -eq 0 ]] ; then
+	DB_STATUS=`db_get_status`
+	if [[ $DB_STATUS -eq $DB_OFF ]] ; then
 		echo "Starting database on default port... "
 		mongod --logpath $LOG_PATH/$DB_LOG_FILE --dbpath $DB_PATH &
 		export MONGO_PID=$!
@@ -153,8 +189,8 @@ function start_db {
 function stop_db {
 	# This doesn't work with MacOS/MongoDB:
 	# mongod --shutdown --dbpath $DB_PATH
-	db_running
-	if [[ $DB_RUNNING -eq 1 ]] ; then
+	DB_STATUS=`db_get_status`
+	if [[ $DB_STATUS -eq 1 ]] ; then
 		echo "Shutting down database server..."
 		kill $MONGO_PID
 		# Temporary safety feature
@@ -171,8 +207,8 @@ function init_dys_log {
 
 function start {
 	# Activate python environment; start db server
-	if [[ ! -z $STARTED ]]; then
-		if [[ $STARTED -eq 1 ]]; then
+	if [[ ! -z $STARTED ]] ; then
+		if [[ $STARTED -eq 1 ]] ; then
 			echo "Already on!"
 			return 0
 		fi
@@ -186,7 +222,7 @@ function start {
 function stop {
 	# Deactivate python environment; stop db server
 	if [[ ! -z $STARTED ]] ; then
-		if [[ $STARTED -ne 0 ]]; then
+		if [[ $STARTED -ne 0 ]] ; then
 			# This doesn't work with MacOS MongoDB
 			stop_db
 			deactivate_env
@@ -194,6 +230,32 @@ function stop {
 		fi
 	else
 		echo "Already off!"
+	fi
+}
+
+function echo_status {
+	# Prints status information on db server and python environment
+	DB_STATUS=`db_get_status`
+	ENV_STATUS=`env_get_status`
+	# Print db server information
+	if [[ $DB_STATUS -eq $DB_ON ]] ; then
+		echo ">> database "$'\t'"ON"
+	elif [[ $DB_STATUS -eq $DB_OFF ]] ; then
+		echo ">> database"$'\t'"OFF"
+	else
+		echo ">> unknown database status"
+	fi
+	# Print python environment information
+	if [[ $ENV_STATUS -eq $ENV_ON ]] ; then
+		echo ">> $PYENV_NAME"$'\t'"ON"
+	elif [[ $ENV_STATUS -eq $ENV_OFF ]] ; then
+		echo ">> $PYENV_NAME"$'\t'"OFF"
+	elif [[ $ENV_STATUS -eq $ENV_NEXIST ]] ; then
+		echo ">> python environment does not exist"
+	elif [[ $ENV_STATUS -eq $ENV_NO_MANAGER ]] ; then
+		echo ">> no recognized python environment manager"
+	else
+		echo ">> unkown python environment status"
 	fi
 }
 
@@ -246,8 +308,8 @@ function clean_env {
 
 function clean_db {
 	# Stop database server if necessary
-	db_running
-	if [[ $DB_RUNNING -eq 1 ]] ; then
+	db_get_status
+	if [[ $DB_STATUS -eq $DB_ON ]] ; then
 		stop_db
 	fi
 	# Empty database directory.
@@ -258,7 +320,7 @@ function clean_db {
 		rm -rf $FULL_DB_PATH/*
 	fi
 	# Restart database server if it was previously shut off
-	if [[ $DB_RUNNING -eq 1 ]] ; then
+	if [[ $DB_STATUS -eq $DB_ON ]] ; then
 		start_db
 	fi
 }
@@ -334,6 +396,8 @@ if [[ $# -ne 0 ]]; then
 		exit)	stop	;;
 		finish)	stop	;;
 		off) 	stop	;;
+
+		status)	echo_status					;;
 
 		clean)	clean $2					;;
 

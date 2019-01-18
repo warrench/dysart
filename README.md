@@ -12,6 +12,32 @@ question, but one probably not worth resolving until there is more substance her
 Note that many features in this package depend on using python 3. The
 configuration script will attempt to use python 3.7.
 
+## Installation
+
+In its current state, DySART is equally supported on MacOS and Linux (it has
+been tested on Ubuntu and Arch Linux). It should also work on Windows, modulo
+any undiscovered filesystem navigation bugs. However, the configuration script,
+which also contains some simple utilities that will be useful to developers, is
+written for bash, so it might only work correctly on unix systems.
+
+To install DySART, first ensure that you have the right requirements installed.
+You will first need python 3.7 and a python virtual environment system
+(conda and virtualenv are currently supported). You should then install MongoDB
+if you want to use the database facilities. This can be done on MacOS with
+homebrew (`$ brew install mongodb`) or from the website. Most non-esoteric Linux
+package managers (including apt and pacman) should also have an up-to-date
+version of MongoDB.
+
+To set up the database and python environment, enter the top-level `dysart`
+directory and run `$ . config on`, which will also test-start these services.
+You can stop them by running `$ . config off`.
+
+If you want to use Labber facilities, you can link DySART to your Labber
+installation by running `$ . config labber /path/to/Labber`.
+
+Now you should be all set. To see what the software can do, try opening
+`dysart/measurement/dummy_measurement.py` in a Jupyter or Hydrogen notebook!
+
 ## (Semi-)stable features
 
 ### Config script
@@ -23,7 +49,7 @@ on`. The script searches for a python environment management tool (currently,
 either conda or virtualenv) and initializes a new environment called `dysenv`
 (Make sure you don't already have an environment with this name!) and installs
 all dependencies that can be found on PyPI (Note to virtualenv users: tk will
-not be supported, and must be provied by your system's pyhton installation). 
+not be supported, and must be provied by your system's pyhton installation).
 It also creates a directory  subtree for the debug database if one is not found.
 After the first usage, this command simply activates the environment and runs
 the database server.
@@ -34,7 +60,7 @@ running on your machine, but exercise caution.
 
 * To update requirements, run `$ . config update`. This feature is probably not
 very reliable. It might cause code regression, and I wouldn't trust it in a
-life-or-death situation. 
+life-or-death situation.
 
 * To make Labber's python API available to DySART, run `$ . config labber
 path/to/Labber` in the top-level directory. Caution: bad things _could_ happen
