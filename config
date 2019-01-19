@@ -33,6 +33,35 @@ ENV_NO_MANAGER=101
 REQUIREMENTS={numpy,lmfit,pymongo,mongoengine,h5py,jsonschema,matplotlib}
 CONDA_REQUIREMENTS={python.app,}
 
+function echo_help {
+	echo ">>> Here are some dysart commands you can try out:"
+	echo $'\t'"on"$'\t\t\t'"start python environment and database"
+	echo $'\t'"off"$'\t\t\t'"stop python environment and database"
+	echo $'\t'"help"$'\t\t\t'"this help page"
+	echo $'\t'"status"$'\t\t\t'"the status of installed services"
+	echo $'\t'"clean"
+	echo $'\t\t'"env"$'\t\t'"remove python environment"
+	echo $'\t\t'"db"$'\t\t'"clear database"
+	echo $'\t\t'"log"$'\t\t'"clear log files"
+	echo $'\t\t'"profile"$'\t\t'"remove modifications to bash profile"
+	echo $'\t\t'"hard"$'\t\t'"all of the above"
+	echo $'\t'"uninstall"$'\t\t'"the hardest clean"
+}
+
+function create_db {
+	# If database location is missing, make it!
+	if [[ ! -d $DYS_PATH/$DB_PATH ]]; then
+		echo ">>> Creating debug database..."
+		mkdir -p $DYS_PATH/$DB_PATH
+	fi
+
+	# If database log is missing, make it!
+	if [[ ! -d $DYS_PATH/$LOG_PATH ]]; then
+		echo ">>> Creating database log..."
+		mkdir -p $DYS_PATH/$LOG_PATH
+	fi
+}
+
 function find_env_manager {
 	# Figure out how environments are managed.
 	# Return a code for each manager type, with
@@ -53,6 +82,7 @@ function find_env_manager {
 
 	echo $ENV_MANAGER
 }
+
 function install_requirements {
 	# Figure out how environments are managed;
 	# Locate an install all required packages.
@@ -71,8 +101,36 @@ function install_requirements {
 		# Assumes you are already in the environment!
 		eval "pip install $REQUIREMENTS"
 	else
-		echo "Unknown environment management tool. No packages to install."
+		echo ">>> Unknown environment management tool. No packages to install."
 	fi
+}
+
+function create_env {
+	# Figure out how environments are managed;
+	# Create the correct environment.
+	ENV_MANAGER=`find_env_manager`
+	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
+		# Check whether Conda env exists. If not,
+		# make one!
+		if [[ -z `conda info -e | grep $PYENV_NAME` ]] ; then
+			activate_env
+			echo ">>> Creating python environment..."
+			conda create -y -n $1 python=$PYTHON_VERSION
+			deactivate_env
+		fi
+	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]]; then
+		if [[ ! -d $DYS_PATH/$1 ]] ; then
+			activate_env
+			echo ">>> Creating python environment..."
+			virtualenv $DYS_PATH/$1 --python=python$PYTHON_VERSION
+			deactivate_env
+		fi
+	else
+		echo "There appears to be no python \\
+		environment management tool installed."
+		echo ">>> Try conda or virtualenv!"
+	fi
+
 }
 
 function activate_env {
@@ -80,39 +138,16 @@ function activate_env {
 	# Activate the correct environment.
 	ENV_MANAGER=`find_env_manager`
 	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
-		# Check whether Conda env exists. If not,
-		# make one!
-		if [[ -z `conda info -e | grep $PYENV_NAME` ]] ; then
-			echo "Creating python environment..."
-			conda create -y -n $1 python=$PYTHON_VERSION
-			# ...And activate the environment.
-			echo "Activating python environment..."
-			conda activate $1
-			echo "Installing dependencies... "
-			install_requirements $1
-		else
-			# ...And activate the environment.
-			echo "Activating python environment..."
-			conda activate $1
-		fi
+		echo ">>> Activating python environment..."
+		conda activate $1
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]]; then
-		if [[ ! -d $1 ]] ; then
-			echo "Creating python environment..."
-			virtualenv $1 --python=python$PYTHON_VERSION
-			# ...And activating the environment.
-			echo "Activating python environment..."
-			source ./$1/bin/activate
-			echo "Installing requirements..."
-			install_requirements $1
-		else
-			# Just activate the environment.
-			echo "Activating python environment..."
-			source ./$1/bin/activate
-		fi
+		# Just activate the environment.
+		echo ">>> Activating python environment..."
+		source $DYS_PATH/$1/bin/activate
 	else
 		echo "There appears to be no python \\
-		environment management tool installed.\n\
-		Try conda or virtualenv!"
+		environment management tool installed."
+		echo ">>> Try conda or virtualenv!"
 	fi
 }
 
@@ -121,15 +156,15 @@ function deactivate_env {
 	# Deactivate the correct environment.
 	ENV_MANAGER=`find_env_manager`
 	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
-		echo "Deactivating python environment..."
+		echo ">>> Deactivating python environment..."
 		conda deactivate
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
 		echo "Deactivating python environment..."
 		deactivate
 	else
-		echo "There appears to be no python \\
-		environment management tool installed.\n\
-		Try conda or virtualenv!"
+		echo ">>> There appears to be no python \\
+		environment management tool installed."
+		echo ">>> Try conda or virtualenv!"
 	fi
 }
 
@@ -178,11 +213,11 @@ function start_db {
 	# Run the mongodb database
 	DB_STATUS=`db_get_status`
 	if [[ $DB_STATUS -eq $DB_OFF ]] ; then
-		echo "Starting database on default port... "
-		mongod --logpath $LOG_PATH/$DB_LOG_FILE --dbpath $DB_PATH &
+		echo ">>> Starting database on default port... "
+		mongod --logpath $DYS_PATH/$LOG_PATH/$DB_LOG_FILE --dbpath $DYS_PATH/$DB_PATH &
 		export MONGO_PID=$!
 	else
-		echo "Database already running."
+		echo ">>> Database already running."
 	fi
 }
 
@@ -191,7 +226,7 @@ function stop_db {
 	# mongod --shutdown --dbpath $DB_PATH
 	DB_STATUS=`db_get_status`
 	if [[ $DB_STATUS -eq 1 ]] ; then
-		echo "Shutting down database server..."
+		echo ">>> Shutting down database server..."
 		kill $MONGO_PID
 		# Temporary safety feature
 		sleep 1
@@ -200,8 +235,8 @@ function stop_db {
 
 function init_dys_log {
 	# If the DySART logfile doesn't exist, make it!
-	if [[ ! -f $LOG_PATH/$DYS_LOG_FILE ]] ; then
-		touch $LOG_PATH/$DYS_LOG_FILE
+	if [[ ! -f $DYS_PATH/$LOG_PATH/$DYS_LOG_FILE ]] ; then
+		touch $DYS_PATH/$LOG_PATH/$DYS_LOG_FILE
 	fi
 }
 
@@ -209,7 +244,7 @@ function start {
 	# Activate python environment; start db server
 	if [[ ! -z $STARTED ]] ; then
 		if [[ $STARTED -eq 1 ]] ; then
-			echo "Already on!"
+			echo ">>> Already on!"
 			return 0
 		fi
 	fi
@@ -229,7 +264,7 @@ function stop {
 			export STARTED=0
 		fi
 	else
-		echo "Already off!"
+		echo ">>> Already off!"
 	fi
 }
 
@@ -239,23 +274,23 @@ function echo_status {
 	ENV_STATUS=`env_get_status`
 	# Print db server information
 	if [[ $DB_STATUS -eq $DB_ON ]] ; then
-		echo ">> database "$'\t'"ON"
+		echo ">>> database "$'\t'"ON"
 	elif [[ $DB_STATUS -eq $DB_OFF ]] ; then
-		echo ">> database"$'\t'"OFF"
+		echo ">>> database"$'\t'"OFF"
 	else
-		echo ">> unknown database status"
+		echo ">>> unknown database status"
 	fi
 	# Print python environment information
 	if [[ $ENV_STATUS -eq $ENV_ON ]] ; then
-		echo ">> $PYENV_NAME"$'\t'"ON"
+		echo ">>> $PYENV_NAME"$'\t'"ON"
 	elif [[ $ENV_STATUS -eq $ENV_OFF ]] ; then
-		echo ">> $PYENV_NAME"$'\t'"OFF"
+		echo ">>> $PYENV_NAME"$'\t'"OFF"
 	elif [[ $ENV_STATUS -eq $ENV_NEXIST ]] ; then
-		echo ">> python environment does not exist"
+		echo ">>> python environment does not exist"
 	elif [[ $ENV_STATUS -eq $ENV_NO_MANAGER ]] ; then
-		echo ">> no recognized python environment manager"
+		echo ">>> no recognized python environment manager"
 	else
-		echo ">> unkown python environment status"
+		echo ">>> unkown python environment status"
 	fi
 }
 
@@ -271,6 +306,7 @@ function clean {
 			db)			clean_db 	;;
 			database)	clean_db 	;;
 			log)		clean_log	;;
+			profile)	clean_profile	;;
 			*)			echo "I don't understand that." ;;
 		esac
 	fi
@@ -283,26 +319,27 @@ function clean_hard {
 	clean_env
 	clean_db
 	clean_log
+	clean_profile
 }
 
 function clean_env {
 	# Delete python environment.
 	ENV_MANAGER=`find_env_manager`
 	if [[ $ENV_MANAGER -eq $CONDA ]] ; then
-		echo "About to delete python environment $PYENV_NAME."
-		read -p "Are you sure ([y]/n)? " DEL_INPUT
+		echo ">>> About to delete python environment $PYENV_NAME."
+		read -p ">>> Are you sure ([y]/n)? " DEL_INPUT
 		if [[ $DEL_INPUT = "y" ]] ; then
 			conda env remove -n $PYENV_NAME
 		fi
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
 		PYENV_PATH=`pwd`/$PYENV_NAME
-		echo "About to recursively delete directory $PYENV_PATH"
-		read -p "Are you sure ([y]/n)? " DEL_INPUT
+		echo ">>> About to recursively delete directory $PYENV_PATH"
+		read -p ">>> Are you sure ([y]/n)? " DEL_INPUT
 		if [[ $DEL_INPUT = "y" ]] ; then
 			rm -rf $PYENV_NAME
 		fi
 	else
-		echo "Unknown environment management tool. No known environment."
+		echo ">>> Unknown environment management tool. No known environment."
 	fi
 }
 
@@ -313,7 +350,7 @@ function clean_db {
 		stop_db
 	fi
 	# Empty database directory.
-	FULL_DB_PATH=`pwd`/$DB_NAME/db
+	FULL_DB_PATH=$DYS_PATH/$DB_NAME/db
 	echo "About to recursively empty directory $FULL_DB_PATH"
 	read -p "Are you sure ([y]/n)? " DEL_INPUT
 	if [[ $DEL_INPUT = "y" ]] ; then
@@ -329,7 +366,7 @@ function clean_log {
 	# Stop database server
 	stop_db
 	# Empty log directory.
-	FULL_LOG_PATH=`pwd`/$DB_NAME/log
+	FULL_LOG_PATH=$DYS_PATH/$DB_NAME/log
 	echo "About to recursively empty directory $FULL_LOG_PATH"
 	read -p "Are you sure ([y]/n)? " DEL_INPUT
 	if [[ $DEL_INPUT = 'y' ]] ; then
@@ -337,8 +374,68 @@ function clean_log {
 	fi
 }
 
+function get_profile {
+	# Figures out which of user's dotfiles to modify
+	if [[ $OSTYPE == darwin* ]] ; then
+		PROFILE=$HOME/.bash_profile
+	elif [[ $OSTYPE == linux-gnu ]] ; then
+		PROFILE=$HOME/.bashrc
+	elif [[ $OSTYPE == freebsd* ]] ; then
+		echo "yes, you're extremely l33t"
+	else
+		echo "Sorry, I'm not sure how to finish installation for your OS."
+	fi
+	echo $PROFILE
+}
 
-function config_labber {
+function write_profile {
+	# Aliases `dys` to . ./config
+	# First argument should be full path to top-level directory
+	PROFILE=$(get_profile)
+	BASENAME=$(basename \`$PROFILE\`)
+	echo "Installer would like to modify your $BASENAME"
+	read -p "Are you sure ([y]/n)? " MOD_INPUT
+	if [[ $MOD_INPUT = 'y' ]] ; then
+		CONTENT="# >>> dysart config >>>\n"
+		CONTENT+="# Added by DySART installer\n"
+		CONTENT+="alias dys=\". "$1"/config\"\n"
+		CONTENT+="export DYS_PATH=$1\n"
+		CONTENT+="# <<< dysart config <<<\n"
+		echo -e $CONTENT"$(cat $PROFILE)" > $PROFILE
+	fi
+}
+
+function clean_profile {
+	PROFILE=$(get_profile)
+	BASENAME=$(basename $PROFILE)
+	echo "Installer would like to modify your $BASENAME"
+	read -p "Are you sure ([y]/n)? " MOD_INPUT
+	if [[ $MOD_INPUT = 'y' ]] ; then
+		if [[ $OSTYPE == darwin* ]] ; then
+			sed -i '' '/# >>> dysart config/,/dysart config <<</d' $PROFILE
+		elif [[ $OSTYPE == linux-gnu ]] ; then
+			sed -i '/# >>> dysart config/,/dysart config <<</d' $PROFILE
+		else
+			"Sorry, I'm not sure how to clean the profile in your OS."
+		fi
+	fi
+}
+
+function get_profile {
+	# Figures out which of user's dotfiles to modify
+	if [[ $OSTYPE == darwin* ]] ; then
+		PROFILE=$HOME/.bash_profile
+	elif [[ $OSTYPE == linux-gnu ]] ; then
+		PROFILE=$HOME/.bashrc
+	elif [[ $OSTYPE == freebsd* ]] ; then
+		echo "yes, you're extremely l33t"
+	else
+		echo "Sorry, I'm not sure how to finish installation for your OS."
+	fi
+	echo $PROFILE
+}
+
+function link_labber {
 	# Set up labber installation for use with python environment
 	# $1 is path to Labber installation
 	ENV_MANAGER=`find_env_manager`
@@ -365,21 +462,38 @@ function config_labber {
 	fi
 }
 
+# Note: unlink_labber isn't really necessary, since uninstall will erase
+# whole python environment.
+
+function install {
+	# If not already installed,
+	# write the dys alias to correct profile dotfile
+	if [[ -z `type -t dys` ]] ; then
+		PROFILE=$(get_profile)
+		if [[ -z $(cat $PROFILE | grep dys) ]] ; then
+			write_profile `pwd`
+		fi
+		source $PROFILE
+
+		# Create python environment
+		create_env $PYENV_NAME
+		install_requirements
+
+		# Create database
+		create_db
+	fi
+}
+
+function uninstall {
+	# Get rid of all the stuff the installation pollutes your system with.
+	clean hard
+	unalias dys
+}
+
+
 #####################
 # SETUP SCRIPT BODY #
 #####################
-
-# If database location is missing, make it!
-if [[ ! -d $DB_PATH ]]; then
-	echo "Creating debug database..."
-	mkdir -p $DB_PATH
-fi
-
-# If database log is missing, make it!
-if [[ ! -d $LOG_PATH ]]; then
-	echo "Creating database log..."
-	mkdir -p $LOG_PATH
-fi
 
 # Parse input to enter python environment and start db server
 if [[ $# -ne 0 ]]; then
@@ -397,25 +511,27 @@ if [[ $# -ne 0 ]]; then
 		finish)	stop	;;
 		off) 	stop	;;
 
+		help)	echo_help					;;
 		status)	echo_status					;;
-
-		clean)	clean $2					;;
-
+		
+		install)	install					;;
+		uninstall)	uninstall				;;
+		clean)		clean $2				;;
 		update)		install_requirements	;;
-		upgrate)	install_requirements	;;
-		labber) 	config_labber $2		;;
-		Labber)		config_labber $2		;;
+		upgrade)	install_requirements	;;
+
+		labber) 	link_labber $2			;;
+		Labber)		link_labber $2			;;
 
 		*) echo "I don't understand that."	;;
 	esac
 else
-	if [[ ! -z $STARTED ]]; then
-		if [[ $STARTED -ne 1 ]]; then
-			start
-		elif [[ $STARTED -ne 0 ]]; then
-			stop
-		fi
+	if [[ -z $(type -t dys ) ]] ; then
+		# The first time it is run, do the installation!
+		install
 	else
-		start
+		# Otherwise, print the help string
+		echo_help
 	fi
+
 fi

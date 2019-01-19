@@ -25,15 +25,17 @@ You will first need python 3.7 and a python virtual environment system
 (conda and virtualenv are currently supported). You should then install MongoDB
 if you want to use the database facilities. This can be done on MacOS with
 homebrew (`$ brew install mongodb`) or from the website. Most non-esoteric Linux
-package managers (including apt and pacman) should also have an up-to-date
+package managers (including apt and pacman) should also supply an up-to-date
 version of MongoDB.
 
 To set up the database and python environment, enter the top-level `dysart`
-directory and run `$ . config on`, which will also test-start these services.
-You can stop them by running `$ . config off`.
+directory and run `$ . config`. It is imperative that you run this command
+verbatim in this directory. Follow the prompts, and it should set up all the
+components for you. You should now be able to run other dysart commands with `$
+dys <command>` from any working directory.
 
 If you want to use Labber facilities, you can link DySART to your Labber
-installation by running `$ . config labber /path/to/Labber`.
+installation by running `$ dys labber /path/to/Labber`.
 
 Now you should be all set. To see what the software can do, try opening
 `dysart/measurement/dummy_measurement.py` in a Jupyter or Hydrogen notebook!
@@ -44,38 +46,37 @@ Now you should be all set. To see what the software can do, try opening
 The config script in the top-level directory auto-handles setup for dysart
 development. Usage is as follows:
 
-* To run setup, navigate to the dysart top-level directory and run `$ . config
-on`. The script searches for a python environment management tool (currently,
+* To run setup, navigate to the dysart top-level directory and run `$ dys on`. The script searches for a python environment management tool (currently,
 either conda or virtualenv) and initializes a new environment called `dysenv`
 (Make sure you don't already have an environment with this name!) and installs
 all dependencies that can be found on PyPI (Note to virtualenv users: tk will
-not be supported, and must be provied by your system's pyhton installation).
+not be supported, and must be provided by your system's python installation).
 It also creates a directory  subtree for the debug database if one is not found.
 After the first usage, this command simply activates the environment and runs
 the database server.
 
 * To deactivate the development environment and kill the database server, run
-`$ . config off`. This feature shouldn't interfere with other mongodb servers
+`$ dys off`. This feature shouldn't interfere with other mongodb servers
 running on your machine, but exercise caution.
 
-* To update requirements, run `$ . config update`. This feature is probably not
+* To update requirements, run `$ dys update`. This feature is probably not
 very reliable. It might cause code regression, and I wouldn't trust it in a
 life-or-death situation.
 
-* To make Labber's python API available to DySART, run `$ . config labber
-path/to/Labber` in the top-level directory. Caution: bad things _could_ happen
-if you run this from another working directory. This feature can also be used
-to update the location of a Labber installation that has been moved, to switch
-to a new Labber installation.
+* To make Labber's python API available to DySART, run `$ dys labber
+path/to/Labber`. This feature can also be used to update the location of a
+Labber installation that has been moved, or to switch to a new Labber installation.
 
-* To perform a hard reset, run `$ . config clean`. This turns everything off,
+* To perform a hard reset, run `$ dys clean`. This turns everything off,
 clears the database and uninstalls the python environment. Note that this
 feature is not strictly safe: if your working directory has similarly named
 subdirectories to `dysart/`, they might end up getting recursively deleted! You
 will be warned about this if you try to do it, but you're being warned about it
-here, too. You can do a more controlled clean with `$ . config clean env`, `$ .
-config clean log` or `$ . config clean db`, which wipe the python environment,
+here, too. You can do a more controlled clean with `$ . config clean env`, `$
+dys clean log` or `$ dys clean db`, which wipe the python environment,
 database log, and whole database, respectively.
+
+* To see a list of commands, run `$ dys` or `$ dys help`.
 
 ### Dummy measurements
 The "dummy lab" in `dysart/measurements` provides a model of some of the
@@ -107,7 +108,7 @@ manually on a Windows machine.
     * Emphasis on robustness. Should operate reliably and predictably on any conceivable real data from the experiments.
 * High-level abstractions for device characterization and device data management
 * Command line tools for measurement
-  * e.g. `$tuneup fridge1/chip1/qb1` to update resonator frequencies, inter-qubit crosstalk; ![](.img/pi.gif)-pulse, ![](.img/T1T2.gif)...
+  * e.g. `$ tuneup fridge1/chip1/qb1` to update resonator frequencies, inter-qubit crosstalk; ![](.img/pi.gif)-pulse, ![](.img/T1T2.gif)...
   * intelligently handle calibration dependencies
   * log calibration snapshots or deltas referenced to existing log files
 
