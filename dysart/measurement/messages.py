@@ -1,6 +1,6 @@
 """
 Standard output messages for displaying hierarchically-organized data such as
-stack-based status lines.
+recursively-called status lines.
 """
 
 import os
@@ -10,12 +10,22 @@ from functools import wraps
 default_logfile_path=os.path.join('..','..','debug_data','log','dysart.log')
 
 def msg1(message, level=0, end="\n"):
+    """
+    Print a formatted message to stdout.
+    Accepts an optional level parameter, which is useful when you might wish
+    to log a stack trace.
+    """
     prompt = '=> '
     indent = '   '
     output = level*indent + prompt + message
     print(output, end=end)
 
 def msg2(message, level=0, end="\n"):
+    """
+    Print a formatted message to stdout.
+    Accepts an optional level parameter, which is useful when you might wish
+    to log a stack trace.
+    """
     prompt = '-> '
     indent = '   '
     output = level*indent + prompt + message
@@ -23,7 +33,7 @@ def msg2(message, level=0, end="\n"):
 
 def write_log(message, logfile):
     """
-    For now, just appends lines to the default log file.
+    Write a message to a log file with date and time information.
     """
     # TODO: use python standard library logging API to log message "correctly"
     separator = ' | '
@@ -35,7 +45,9 @@ def write_log(message, logfile):
 
 def logged(logfile=default_logfile_path, stdout=True, message='log event'):
     """
-    decorator for handling log messages.
+    Decorator for handling log messages. By default, writes to a default log
+    file in the debug_data database directory, and prints output to stdout.
+    Passes level parameter in decorated function to message functions to 
     """
     if logfile is None or logfile is '':
         # Set the log output to the null file. This should actually be cross-
