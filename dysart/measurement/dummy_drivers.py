@@ -129,12 +129,12 @@ class FizzTimeConst(Feature):
 		self.refresh_dependencies(level=level+1)
 		self.measure_time_const(level=level+1)
 
+	@logged(message='measuring fizziness... ')
 	def measure_fizziness(self, level=0):
 		"""
 		Measures the fizziness of a fizzer and inserts it into the Feature's
 		record of fizziness measurements in self.data
 		"""
-		msg2("measuring fizziness... ", level=level, end='')
 		self.fizzmeterdriver.measure()
 		fizziness = self.fizzmeterdriver.get_last_measurement()
 		print("{:.3f}".format(fizziness))
@@ -145,13 +145,13 @@ class FizzTimeConst(Feature):
 			self.data['fizziness'].append(data_entry)
 		return
 
+	@logged(message='measuring time constant.')
 	def measure_time_const(self, level=0):
 		"""
 		Performs a sequence of fizziness measurements; retrieves the values
 		and fits the measured values to a decaying exponential. Records the
 		time constant in the Feature's data field.
 		"""
-		msg1("measuring time constant.", level=level)
 		self.fizzmeterdriver.clear_measurements()
 		for _ in range(self.n_data_points):
 				self.measure_fizziness(level=level+1)
@@ -173,8 +173,8 @@ class FizzTimeConst(Feature):
 
 		return
 
+	@logged(message='getting time constant.')
 	def get_time_const(self):
-		msg1('getting time constant.', level=0)
 		if self.is_stale():
 				self.refresh(level=0)
 		return self.data['exp_fit_result'][-1][1]['decay']
@@ -211,8 +211,9 @@ class FizzmeterDriver(Feature):
 		elapsed_time = (now_time - cal_time).total_seconds()
 		return elapsed_time > np.sqrt(decal_time_sec) * self.decal_tolerance
 
+	@logged(message='calibrating fizzmeter.')
 	def calibrate(self, level=0):
-		msg1("calibrating fizzmeter.", level=level)
+		#msg1("calibrating fizzmeter.", level=level)
 		self.fizzmeter.calibrate()
 		self.timestamp = dt.datetime.now()
 

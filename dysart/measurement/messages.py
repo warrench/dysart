@@ -5,25 +5,23 @@ stack-based status lines.
 
 import os
 import datetime as dt
+from functools import wraps
 
-default_logfile_path='../../debug_data/log/dysart.log'
-indent = '   '
+default_logfile_path=os.path.join('..','..','debug_data','log','dysart.log')
 
-def msg1(message, level=0, logged=True, end="\n"):
+def msg1(message, level=0, end="\n"):
     prompt = '=> '
     indent = '   '
     output = level*indent + prompt + message
-    write_log(output)
     print(output, end=end)
 
-def msg2(message, level=0, logged=True, end="\n"):
+def msg2(message, level=0, end="\n"):
     prompt = '-> '
     indent = '   '
     output = level*indent + prompt + message
-    write_log(output)
     print(output, end=end)
 
-def write_log(message, logfile=default_logfile_path):
+def write_log(message, logfile):
     """
     For now, just appends lines to the default log file.
     """
@@ -34,3 +32,31 @@ def write_log(message, logfile=default_logfile_path):
     f = open(logfile, 'a')
     f.write(prefix + message + '\n')
     f.close()
+
+def logged(logfile=default_logfile_path, stdout=True, message='log event'):
+    """
+    decorator for handling log messages.
+    """
+    if logfile is None or logfile is '':
+        # Set the log output to the null file. This should actually be cross-
+        # platform, i.e. equal to '/dev/null' on unix systems and 'NULL' on
+        # windows.
+        logfile = os.devnull
+    def decorator(fn):
+        @wraps(fn)
+        def wrapped(*args, **kwargs):
+            # write stdout message
+            if stdout:
+                if 'level' in kwargs:
+                    lvl = kwargs['level']
+                else:
+                    lvl = 0
+                msg1(message, level=lvl)
+            # write log message
+            write_log(message, logfile)
+            # Call the original function
+            fn(*args, **kwargs)
+            # Post-call operations
+            # ...
+        return wrapped
+    return decorator
