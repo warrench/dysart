@@ -7,7 +7,7 @@ is pretty handy for a demonstration like this.
 """
 import datetime as dt
 from dummy_lab import *
-from dummy_drivers import *
+from dummy_features import *
 """
 Use mongoengine, MongoDB's ODM ("Object-Document Mapper"), which is something
 like an ORM for a document-based noSQL database. This doesn't let me easily
@@ -57,11 +57,11 @@ print('Done.')
 print('Creating virtual devices... ', end='')
 
 # A Fizzmeter
-fizzmeter_driver_1 = FizzmeterDriver(name='fizz-d-1')
-fizzmeter_driver_2 = FizzmeterDriver(name='fizz-d-2')
+fm_cont_1 = FizzmeterController(name='fmcont1')
+fm_cont_2 = FizzmeterController(name='fmcont2')
 
 # A carbonator
-carbonator_driver = CarbonatorDriver()
+carb_cont = CarbonatorController()
 
 print('Done.')
 
@@ -69,14 +69,14 @@ print('Done.')
 # Connect virtual devices to physical ones #
 ############################################
 
-print('Connecting virtual devices to lab... ', end='')
+print('Connecting virtual devices to lab... ')
 
 # Fizzmeters
-fizzmeter_driver_1.connect(fizzmeter_1)
-fizzmeter_driver_2.connect(fizzmeter_2)
+fm_cont_1.connect(fizzmeter_1)
+fm_cont_2.connect(fizzmeter_2)
 
 # Carbonator
-carbonator_driver.connect(carbonator)
+carb_cont.connect(carbonator)
 
 print('Done.')
 
@@ -106,21 +106,22 @@ This is a lot of boilerplate even for a simple system!
 # Fizzer time constants
 # TODO: Why does name setting not work? Understand how update() func works.
 
-fizzer_1_time_const = FizzTimeConst(n_data_points=10,
-                                    time_interval=0.1,
-                                    name='fizz-tc-1')
-fizzer_1_time_const.dependencies = set({fizzmeter_driver_1})
-fizzer_1_time_const.fizzmeterdriver = fizzmeter_driver_1
+fizz_1_time_const = FizzTimeConst(n_data_points=10,
+                                  time_interval=0.1,
+                                  name='fizz-tc-1')
+fizz_1_time_const.parents = set({fm_cont_1})
+fizz_1_time_const.fm_cont = fm_cont_1
 
-fizzer_2_time_const = FizzTimeConst(n_data_points=10,
-                                    time_interval=0.2,
-                                    name='fizz-tc-2')
-fizzer_2_time_const.dependencies = set({fizzmeter_driver_2})
-fizzer_2_time_const.fizzmeterdriver = fizzmeter_driver_2
+fizz_2_time_const = FizzTimeConst(n_data_points=10,
+                                  time_interval=0.2,
+                                  name='fizz-tc-2')
+fizz_2_time_const.parents = set({fm_cont_2})
+fizz_2_time_const.fm_cont = fm_cont_2
 
 
 print('Done.')
 
+"""
 ########################
 # Do some measurements #
 ########################
@@ -142,3 +143,5 @@ print('Fizzer 2 time constant is measured to be {:.3f} seconds.'.format(tc))
 print('Saving result to database...', end='')
 fizzer_2_time_const.save()
 print('Done.')
+
+"""

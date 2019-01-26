@@ -14,10 +14,11 @@
 
 DATETIME=`date '+%Y-%m-%d_%H:%M:%S'`
 DB_NAME=debug_data
-DB_PATH=./$DB_NAME/db
-LOG_PATH=./$DB_NAME/log
+DB_PATH=$DB_NAME/db
+LOG_PATH=$DB_NAME/log
 DB_LOG_FILE=mongodb_$DATETIME.log
-DYS_LOG_FILE=dysart.log
+DB_CONNECT_SCRIPT_NAME=connect_db.py
+sDYS_LOG_FILE=dysart.log
 PYTHON_VERSION="3.7"
 PYENV_NAME=dysenv
 CONDA=1
@@ -180,7 +181,7 @@ function env_get_status {
 			ENV_STATUS=$ENV_OFF
 		fi
 	elif [[ $ENV_MANAGER -eq $VIRTUALENV ]] ; then
-		if [[ -d ./$PYENV_NAME ]] ; then
+		if [[ -d $DYS_PATH/$PYENV_NAME ]] ; then
 			if [[ ! -z `echo $VIRTUAL_ENV | grep $PYENV_NAME` ]] ; then
 				ENV_STATUS=$ENV_ON
 			else
@@ -220,6 +221,28 @@ function start_db {
 	else
 		echo "Database already running."
 	fi
+	
+	# Write the db connect script literally, if it does not exist.
+	CONNECT_SCRIPT_PATH=$DYS_PATH/$DB_NAME/$DB_CONNECT_SCRIPT_NAME
+	if [[ ! -f $CONNECT_SCRIPT_PATH ]] ; then
+		# Write connect script. This might be a little opaque, so keep tabs
+		# on it and whether it needs to be documented properly. 
+		echo -e \
+"import os, sys\n"\
+"import mongoengine as me\n"\
+"# Open a connection to the Mongo database\n"\
+"host_data = ('localhost', 27017)\n"\
+"me.connect('$DB_NAME',host=host_data[0],port=host_data[1])\n"\
+"sys.path.pop(0)\n"\
+"sys.path.insert(0,os.getcwd())\n"\
+		>> $CONNECT_SCRIPT_PATH
+	fi
+
+	# Run python with database connection (safely!)
+	if [[ -z $(alias | grep python) ]] ; then
+		alias python="echo connecting to database server... &&
+		python -q -i $CONNECT_SCRIPT_PATH"
+	fi
 }
 
 function stop_db {
@@ -231,6 +254,9 @@ function stop_db {
 		kill $MONGO_PID
 		# Temporary safety feature
 		sleep 1
+	fi
+	if [[ ! -z $(alias | grep "python.*$DB_CONNECT_SCRIPT") ]] ; then
+		unalias python
 	fi
 }
 
@@ -245,7 +271,7 @@ function start {
 	# Activate python environment; start db server
 	if [[ ! -z $STARTED ]] ; then
 		if [[ $STARTED -eq 1 ]] ; then
-			echo ">>> Already on!"
+			echo "Already on!"
 			return 0
 		fi
 	fi

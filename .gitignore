@@ -11,6 +11,10 @@ debug_data
 # Python virtual environment
 env
 pyenv
+dysenv
+
+# Travis file
+.travis.yml
 
 ### https://github.com/github/gitignore ###
 
