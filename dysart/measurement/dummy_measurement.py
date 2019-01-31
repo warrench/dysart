@@ -120,28 +120,3 @@ fizz_2_time_const.fm_cont = fm_cont_2
 
 
 print('Done.')
-
-"""
-########################
-# Do some measurements #
-########################
-
-# These are optional, and not part of the setup. If you're using this as a
-# notebook template, feel free to remove or edit them.
-
-print('Do some measurements... ')
-fizzer_2_time_const.measure_time_const()
-print('Done.')
-tc = fizzer_2_time_const.get_time_const()
-print('Fizzer 2 time constant is measured to be {:.3f} seconds.'.format(tc))
-
-########################
-# Save to the database #
-########################
-
-#fizzer_2_time_const.name='fizz-tc-2'
-print('Saving result to database...', end='')
-fizzer_2_time_const.save()
-print('Done.')
-
-"""

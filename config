@@ -39,6 +39,7 @@ function echo_help {
 	echo $'\t'"on"$'\t\t\t'"start python environment and database"
 	echo $'\t'"off"$'\t\t\t'"stop python environment and database"
 	echo $'\t'"help"$'\t\t\t'"this help page"
+	echo $'\t'"labber"$'\t\t\t'"link Labber to DySART"
 	echo $'\t'"status"$'\t\t\t'"the status of installed services"
 	echo $'\t'"clean"
 	echo $'\t\t'"env"$'\t\t'"remove python environment"
@@ -189,10 +190,10 @@ function env_get_status {
 			fi
 		else
 			ENV_STATUS=$ENV_NEXIST
-		fi	
+		fi
 	else
 		ENV_STATUS=$ENV_NO_MANAGER
-	fi	
+	fi
 
 	echo $ENV_STATUS
 }
@@ -206,7 +207,7 @@ function db_get_status {
 	else
 		DB_STATUS=$DB_OFF
 	fi
-	
+
 	echo $DB_STATUS
 }
 
@@ -221,12 +222,12 @@ function start_db {
 	else
 		echo "Database already running."
 	fi
-	
+
 	# Write the db connect script literally, if it does not exist.
 	CONNECT_SCRIPT_PATH=$DYS_PATH/$DB_NAME/$DB_CONNECT_SCRIPT_NAME
 	if [[ ! -f $CONNECT_SCRIPT_PATH ]] ; then
 		# Write connect script. This might be a little opaque, so keep tabs
-		# on it and whether it needs to be documented properly. 
+		# on it and whether it needs to be documented properly.
 		echo -e \
 "import os, sys\n"\
 "import mongoengine as me\n"\
@@ -543,7 +544,7 @@ if [[ $# -ne 0 ]]; then
 
 		help)	echo_help					;;
 		status)	echo_status					;;
-		
+
 		install)	install					;;
 		uninstall)	uninstall				;;
 		clean)		clean $2				;;

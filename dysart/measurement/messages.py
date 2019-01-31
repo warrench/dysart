@@ -47,7 +47,8 @@ def write_log(message, logfile):
         f.write(prefix + message + '\n')
 
 
-def logged(logfile=default_logfile_path, stdout=True, message='log event'):
+def logged(logfile=default_logfile_path, stdout=True,
+           message='log event', **kwargs):
     """
     Decorator for handling log messages. By default, writes to a default log
     file in the debug_data database directory, and prints output to stdout.
@@ -59,20 +60,25 @@ def logged(logfile=default_logfile_path, stdout=True, message='log event'):
         # windows.
         logfile = os.devnull
 
+    # set string terminator for log message
+    term = "\n"
+    if 'end' in kwargs:
+        term = kwargs['end']
+
     def decorator(fn):
         @wraps(fn)
-        def wrapped(*args, **kwargs):
+        def wrapped(*args, **kwargs_inner):
             # write stdout message
             if stdout:
-                if 'level' in kwargs:
-                    lvl = kwargs['level']
+                if 'level' in kwargs_inner:
+                    lvl = kwargs_inner['level']
                 else:
                     lvl = 0
-                msg1(message, level=lvl)
+                msg1(message, level=lvl, end=term)
             # write log message
             write_log(message, logfile)
             # Call the original function
-            return_value = fn(*args, **kwargs)
+            return_value = fn(*args, **kwargs_inner)
             # Post-call operations
             # ...
             # Finally, return whatever fn would have returned!

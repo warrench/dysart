@@ -26,7 +26,7 @@ class FizzTimeConst(Feature):
 	time_interval = FloatField()
 	n_data_points = IntField()
 
-	@logged(message='measuring fizziness... ')
+	@logged(message='measuring fizziness... ', end='')
 	def measure_fizziness(self, level=0):
 		"""
 		Measures the fizziness of a fizzer and inserts it into the Feature's
@@ -70,15 +70,16 @@ class FizzTimeConst(Feature):
 
 		return
 
-	def no_recorded_result(self):
+	def no_recorded_result(self, level=0):
 		"""
 		Expiration condition for FizzTimeConst: is there a result?
 		"""
-		return 'exp_fit_result' in self.data
+		return (('exp_fit_result' not in self.data)
+		 		or not self.data['exp_fit_result'])
 
 	@property
 	@refresh
-	@logged(message='getting time constant... ')
+	@logged(message='getting time constant... ', end='')
 	def time_const(self):
 		"""
 		Get the time constant from the last measurement performed. Triggers a

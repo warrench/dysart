@@ -1,7 +1,14 @@
 """
 Top-level dysart feature class. Defines dependency-solving behavior at a high
-level of abstraction, deferring implementation of refresh functions to user-
+level of abstraction, deferring implementation of update conditions to user-
 defined subclasses.
+
+The Feature interface is designed to be as nearly invisible as possible. The
+rationale goes like this: someone---somewhere, somewhen---has to explicitly
+specify the device-property dependency graph. This person (the "user") should be
+protected only from thinking about more than one system layer _at a time_.
+Later on, some other scientist might like to take a far-downstream measurement
+without having to think about _anything_ more than the highest leayer of
 """
 
 #import Labber
@@ -54,25 +61,26 @@ def refresh(fn):
 			lvl = kwargs['level']
 		else:
 			lvl = 0
+		# is_stale tracks whether we need to update this node
 		is_stale = False
 		# if this call recurses, recurse on ancestors.
 		if self.is_recursive():
 			for parent in self.parents:
-				# TODO: implement this default refresh function
-				# If an upstream feature expired, this feature needs to be
-				# refreshed as well.
-				parent_expired = parent.expired()
-				if parent_expired:
-					# Call parent to refresh recursively
-					parent()
-				is_stale |= parent_expired
+				# Call parent to refresh recursively; increment stack depth
+				parent_is_stale = parent.touch(level=lvl + 1, is_stale=0)
+				is_stale |= parent_is_stale
 		# If stale for some other reason, also flag to be updated.
-		self_expired = self.expired()
+		self_expired = self.expired(level=lvl)
 		is_stale |= self_expired
 		# Call the update-self method, the reason for this wrapper's existence
-		self()
+		if is_stale:
+			self(level=lvl)
+		# Update staleness parameter in case it was passed in with the function
+		# TODO: this currently only exists for the benefit of Feature.touch().
+		# If that method is removed, consider getting rid of this snippet, too.
+		if 'is_stale' in kwargs:
+			kwargs['is_stale'] = is_stale
 		# Call the requested function!
-#TODO	#@logged(level=lvl)
 		return_value = fn(*args, **kwargs)
 		# Save any changes to the database
 		self.save()
@@ -85,9 +93,7 @@ def refresh(fn):
 class Feature(Document):
 	"""
 	Device or component feature class. Each measurement should be implemented
-	as a an instance of this class.
-	# Note that Feature will be subclassed many times per experiment! (Though
-	# hopefully reusably, if I don't mess things up!)
+	as an instance of this class.
 	"""
 
 	meta = {'allow_inheritance': True}
@@ -110,7 +116,7 @@ class Feature(Document):
 	# Does this work? The decorator is interpreted at runtime, so self.name will
 	# be in scope, right?
 	@logged('update method called')
-	def __call__(self):
+	def __call__(self, level=0):
 		"""
 		Feature is callable. This method does whatever is needed to update an
 		expired feature.
@@ -120,11 +126,23 @@ class Feature(Document):
 		in some ways, but it's also a little unpythonic: "explicit is better
 		than implicit".
 		"""
-
 		self.timestamp = dt.datetime.now()
-		return self
+		return
 
-	def expired(self):
+	@refresh
+	def touch(self, level=0, is_stale=False):
+		"""
+		Manually refresh the feature without doing anything else. This method
+		has a special role, being invoked by DySART as the default refresh
+		method called as it climbs the feature tree. It's also treated in a
+		special way by @refresh, in order to propagate refresh data downstream.
+		While this does work, it's a little bit unpythonic: "explicit is better
+		than implicit".
+		In short, this is a hack, and it shouldn't last.
+		"""
+		return is_stale
+
+	def expired(self, level=0):
 		"""
 		Check for feature expiration. By default, everything is a twinkie.
 		"""
