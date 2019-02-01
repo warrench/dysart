@@ -108,10 +108,11 @@ class Feature(Document):
 	timestamp = DateTimeField(default=dt.datetime.now())
 	is_stale_func = StringField(max_length=60)
 	refresh_func = StringField(max_length=60)
+	parents = ListField(default=[])
 
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)
-		self.parents = set([])
+		self.save()
 
 	# Does this work? The decorator is interpreted at runtime, so self.name will
 	# be in scope, right?
@@ -159,3 +160,23 @@ class Feature(Document):
 		a feature might take its place in the future.
 		"""
 		return True
+
+	def add_parents(self, *new_parents):
+		"""
+		Insert a dependency into the feature's parents list and write to the
+		database. Can pass a single feature, multiple features as
+		comma-separated parameters, a list of features, a list of list of
+		features, and so on.
+		"""
+		for parent in new_parents:
+			# Handle (arbitrarily deeply nested) lists of parents.
+			# This works with explicit type-checking, but it's not the most
+			# pythonic solution in the world. Could be done more canonically
+			# Feature weren't iterable!
+			if isinstance(parent, Feature):
+				if parent not in self.parents:
+					print("ok, adding a parent!")
+					self.parents.append(parent)
+			else:
+				self.add_parents(*parent)
+		self.save()
