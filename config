@@ -35,7 +35,7 @@ LAB_OFF=lab_off
 LAB_ON=lab_on
 
 #TODO: retrieve this list externally!
-REQUIREMENTS={numpy,lmfit,pymongo,mongoengine,h5py,jsonschema,matplotlib}
+REQUIREMENTS={numpy,lmfit,pymongo,mongoengine,h5py,jsonschema,matplotlib,pint}
 CONDA_REQUIREMENTS={python.app,}
 VIRTUALENV_REQUIREMENTS={}
 

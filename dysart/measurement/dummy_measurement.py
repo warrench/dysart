@@ -8,18 +8,6 @@ is pretty handy for a demonstration like this.
 import datetime as dt
 from dummy_lab import *
 from dummy_features import *
-"""
-Use mongoengine, MongoDB's ODM ("Object-Document Mapper"), which is something
-like an ORM for a document-based noSQL database. This doesn't let me easily
-implement all the features I would like, including VCS-like stage/commit
-and branching of configuration changes, but the high-level API is good enough
-for a crude proof of principle, which this script is.
-"""
-from mongoengine import *
-
-# Open a connection to the Mongo database
-host_data = ('localhost', 27017)
-connect('dummy_db', host=host_data[0], port=host_data[1])
 
 #####################################
 # set up the "physical" lab devices #
