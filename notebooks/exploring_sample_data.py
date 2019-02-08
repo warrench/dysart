@@ -27,7 +27,7 @@ log_file = Labber.LogFile(os.path.abspath(sample_data_path + file_name))
 
 # Create test plot, find a minimum
 qubit_number = 1
-channel_name = 'MQ PulseGen - Voltage, QB%d' % qubit_number
+channel_name = 'MQ PulseGen - Voltage, QB{}'.format(qubit_number)
 (x, y) = log_file.getTraceXY(entry=-1, y_channel=channel_name)
 
 plt.subplot(111)

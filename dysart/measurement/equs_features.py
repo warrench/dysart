@@ -16,12 +16,14 @@ def no_recorded_result(self, level=0):
     """
     return (('fit_results' not in self.data) or not self.data['fit_results'])
 
+
 class ResonatorSpectrum(LabberFeature):
     pass
 
 
 class Qubit:
     pass
+
 
 class QubitSpectrum(LabberFeature):
 
@@ -30,6 +32,7 @@ class QubitSpectrum(LabberFeature):
 
     @logged(message='measuring qubit spectrum...', end='')
     def call__(self):
+        print('input_file is ' + input_file)
         # TODO: other stuff
         super().__call__(self)
         # Raw data is now in output_file.

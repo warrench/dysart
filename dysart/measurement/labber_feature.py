@@ -12,18 +12,20 @@ from feature import Feature
 try:
     if platform.system() == 'Darwin':
         ScriptTools.setExePath(os.path.abspath('/Applications/Labber'))
-    else if platform.system() == 'Linux':
+    elif platform.system() == 'Linux':
         pass
     else:
         raise Exception('Unsupported platform!')
 except Exception as e:
     pass
 
+
 class LabberFeature(Feature):
 
-    input_file = ''
+    input_file = '.'
 
-    def __init__(self, output_file):
+    def __init__(self, output_file, **kwargs):
+        super().__init__()
         self.config = ScriptTools.MeasurementObject(self.input_file, output_file)
 
     def __call__(self, **kwargs):

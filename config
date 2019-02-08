@@ -329,7 +329,8 @@ function start {
 	fi
 	activate_env $PYENV_NAME
 	start_db
-	start_lab
+# 	Do not do this for now!
+#	start_lab
 	init_dys_log
 	export STARTED=1
 }
