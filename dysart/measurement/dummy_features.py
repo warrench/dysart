@@ -20,7 +20,7 @@ from messages import *
 class FizzTimeConst(Feature):
 	"""
 	Feature class for  the time constant of a fizzer attached to an associated
-	fm_cont, self.fm_cont.
+	fm_cont, self.parents['fm_cont'].
 	"""
 
 	data = DictField(default={'fizziness': [], 'exp_fit_result': []})
@@ -33,8 +33,8 @@ class FizzTimeConst(Feature):
 		Measures the fizziness of a fizzer and inserts it into the Feature's
 		record of fizziness measurements in self.data
 		"""
-		self.fm_cont.measure()
-		fizziness = self.fm_cont.get_last_measurement()
+		self.parents['fm_cont'].measure()
+		fizziness = self.parents['fm_cont'].get_last_measurement()
 		print("{:.3f}".format(fizziness))
 		data_entry = (dt.datetime.now(), fizziness)
 		if self.data['fizziness'] is None:
@@ -50,7 +50,7 @@ class FizzTimeConst(Feature):
 		and fits the measured values to a decaying exponential. Records the
 		time constant in the Feature's data field.
 		"""
-		self.fm_cont.clear_measurements()
+		self.parents['fm_cont'].clear_measurements()
 		for _ in range(self.n_data_points):
 				self.measure_fizziness(level=level + 1)
 				time.sleep(self.time_interval)

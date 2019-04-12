@@ -65,9 +65,10 @@ def refresh(fn):
 		is_stale = False
 		# if this call recurses, recurse on ancestors.
 		if self.is_recursive():
-			for parent in self.parents:
+			for parent_key in self.parents:
 				# Call parent to refresh recursively; increment stack depth
-				parent_is_stale = parent.touch(level=lvl + 1, is_stale=0)
+				parent_is_stale = self.parents[parent_key]\
+										.touch(level=lvl + 1, is_stale=0)
 				is_stale |= parent_is_stale
 		# If stale for some other reason, also flag to be updated.
 		self_expired = self.__expired__(level=lvl)
@@ -108,7 +109,7 @@ class Feature(Document):
 	timestamp = DateTimeField(default=dt.datetime.now())
 	is_stale_func = StringField(max_length=60)
 	refresh_func = StringField(max_length=60)
-	parents = ListField(default=[])
+	parents = DictField(default={})
 
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)

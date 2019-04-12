@@ -68,6 +68,7 @@ class LabberFeature(Feature):
         for key in kwargs:
             self.setValue(key, kwargs[key])
 
+        # Make RPC to Labber!
         self.config.performMeasurement()
 
     def setValue(self, label, value):

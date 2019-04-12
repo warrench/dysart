@@ -60,11 +60,22 @@ class QubitSpectrum(labber_feature.LabberFeature):
 
     input_file_path = StringField(default=meas.qubit_spec_file)
     output_file_path = StringField(default=meas.qubit_spec_file_out)
+
+    # Instrument nameS: hardcoded for now.
+    pulse_generator = StringField(
+        default='Multi-Qubit Pulse Generator - '
+    )
+    qubit_simulator = StringField(
+        default='Single-Qubit Simulator - '
+    )
+
     # Channel names: hardcoded for now.
     drive_frequency_channel = StringField(
-        default='Single-Qubit Simulator - Drive frequency')
+        default='Single-Qubit Simulator - Drive frequency'
+    )
     polarization_Z_channel = StringField( 
-        default='Single-Qubit Simulator - Polarization - Z')
+        default='Single-Qubit Simulator - Polarization - Z'
+    )
     #def __init__(self):
     #    super().__init__()
 
@@ -72,6 +83,7 @@ class QubitSpectrum(labber_feature.LabberFeature):
     def __call__(self, level=0):
         # TODO: other stuff
         super().__call__()
+
         # Raw data is now in output_file. Load it into self.data.
         log_file = Labber.LogFile(self.output_file_path)
         num_entries = log_file.getNumberOfEntries()
@@ -113,18 +125,32 @@ class QubitRabi(labber_feature.LabberFeature):
 
     input_file_path = StringField(default=meas.qubit_rabi_file)
     output_file_path = StringField(default=meas.qubit_rabi_file_out)
+
+    # Instrument nameS: hardcoded for now.
+    pulse_generator = StringField(
+        default='Multi-Qubit Pulse Generator - '
+    )
+    qubit_simulator = StringField(
+        default='Single-Qubit Simulator - '
+    )
+
     # Channel names: hardcoded for now.
     plateau_channel = StringField(
-        default='Multi-Qubit Pulse Generator - Plateau')
+        default='Multi-Qubit Pulse Generator - Plateau'
+    )
     polarization_Z_channel = StringField( 
-        default='Single-Qubit Simulator - Polarization - Z')
-    #def __init__(self):
-    #    super().__init__()
+        default='Single-Qubit Simulator - Polarization - Z'
+    )
 
     @logged(message='measuring qubit rabi...', end='\n')
     def __call__(self, level=0):
         # TODO: other stuff
         super().__call__()
+
+        center_freq = self.parents['spec'].center_freq
+        freq_channel = self.parents['spec'].drive_frequency_channel
+        self.config.updateValue(freq_channel, center_freq)
+
         # Raw data is now in output_file. Load it into self.data.
         log_file = Labber.LogFile(self.output_file_path)
         num_entries = log_file.getNumberOfEntries()

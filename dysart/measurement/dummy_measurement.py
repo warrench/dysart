@@ -97,14 +97,12 @@ This is a lot of boilerplate even for a simple system!
 fizz_1_time_const = FizzTimeConst(n_data_points=10,
                                   time_interval=0.1,
                                   name='fizz-tc-1')
-fizz_1_time_const.add_parents(fm_cont_1)
-fizz_1_time_const.fm_cont = fm_cont_1
+fizz_1_time_const.parents['fm_cont'] = fm_cont_1
 
 fizz_2_time_const = FizzTimeConst(n_data_points=10,
                                   time_interval=0.2,
                                   name='fizz-tc-2')
-fizz_2_time_const.add_parents(fm_cont_2)
-fizz_2_time_const.fm_cont = fm_cont_2
+fizz_2_time_const.parents['fm_cont'] = fm_cont_2
 
 
 print('Done.')
