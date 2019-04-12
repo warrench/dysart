@@ -1,14 +1,27 @@
 from feature import *
 from messages import *
 from mongoengine import *
-from labber_feature import *
+import labber_feature
 from Labber import ScriptTools
-from equs_std import measurements as meas
+import equs_std.measurements as meas
 
-from uncertainties import ufloat # Return values with error bars!
+from uncertainties import ufloat  # Return values with error bars!
 from uncertainties.umath import *
-import pint # Units package
+import pint  # Units package
 ureg = pint.UnitRegistry()
+
+"""
+json/binary <-> dict syntax
+-------------------------------------------------------------
+
+import Labber
+
+d = Labber.ScriptTools.load_scenario_as_dict('testfile.json')
+print(d)
+Labber.ScriptTools.save_scenario_as_binary(d, 'test_out')
+Labber.ScriptTools.save_scenario_as_json(d, 'test_out_json')
+"""
+
 
 def no_recorded_result(self, level=0):
     """
@@ -17,7 +30,7 @@ def no_recorded_result(self, level=0):
     return (('fit_results' not in self.data) or not self.data['fit_results'])
 
 
-class ResonatorSpectrum(LabberFeature):
+class ResonatorSpectrum(labber_feature.LabberFeature):
     pass
 
 
@@ -25,13 +38,18 @@ class Qubit:
     pass
 
 
-class QubitSpectrum(LabberFeature):
+class QubitSpectrum(labber_feature.LabberFeature):
+    """
+    Feature object for the spectrum of a qubit. For the purposes of an initial
+    demo, this should really be just an abstraction of a polarization-vs-
+    frequency plot.
+    """
 
     data = DictField(default={'fit_results': []})
     input_file = StringField(deault=meas.qubit_spec_file)
 
     @logged(message='measuring qubit spectrum...', end='')
-    def call__(self):
+    def __call__(self):
         print('input_file is ' + input_file)
         # TODO: other stuff
         super().__call__(self)
@@ -46,7 +64,7 @@ class QubitSpectrum(LabberFeature):
         Return the best guess for the resonant frequency of the qubit's 0 <-> 1
         transition
         """
-        return self.data['fit_results'][-1]
+        return self.data['fit_results'][-1][]
         pass
 
     @property
@@ -61,7 +79,10 @@ class QubitSpectrum(LabberFeature):
 
 
 class QubitRabi(LabberFeature):
-
+    """
+    Feature object for a Rabi measurement on a qubit.
+    """
+    
     data = DictField(default={'fit_results': []})
     input_file = StringField(default=meas.qubit_rabi_file)
 

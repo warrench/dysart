@@ -34,6 +34,13 @@ ENV_NO_MANAGER=env_no_manager
 LAB_OFF=lab_off
 LAB_ON=lab_on
 
+# Display and pretty-printing
+fg_red="$(tput setaf 1)"
+fg_green="$(tput setaf 2)"
+reset="$(tput sgr0)"
+ON_STR="${fg_green}ON${reset}"
+OFF_STR="${fg_red}OFF${reset}"
+
 #TODO: retrieve this list externally!
 REQUIREMENTS={numpy,lmfit,pymongo,mongoengine,h5py,jsonschema,matplotlib,pint}
 CONDA_REQUIREMENTS={python.app,}
@@ -210,9 +217,7 @@ function env_get_status {
 function db_get_status {
 	# Checks if database server is already running.
 	# Returns process id if it is.
-	# Note the too-clever regex trick to filter out
-	# a real mongod process without grep catching itself.
-	PID=$(ps | grep "[m]ongo" | awk 'NR=1{print $1}')
+	PID=$(pgrep mongod)
 	if [[ ! -z $PID ]] ; then
 		DB_STATUS=$PID
 	else
@@ -342,7 +347,8 @@ function stop {
 			# This doesn't work with MacOS MongoDB
 			deactivate_env
 			stop_db
-			stop_lab
+			#  Do not do this for now!
+			#  stop_lab
 			export STARTED=0
 		fi
 	else
@@ -363,17 +369,17 @@ function echo_status {
 	LAB_STATUS=$(lab_get_status)
 	# Print db server information
 	if [[ $DB_STATUS =~ $integral ]] ; then
-		echo "database "$'\t'"ON"
+		echo "database "$'\t'"$ON_STR"
 	elif [[ $DB_STATUS = $DB_OFF ]] ; then
-		echo "database"$'\t'"OFF"
+		echo "database"$'\t'"$OFF_STR"
 	else
 		echo "unknown database status"
 	fi
 	# Print python environment information
 	if [[ $ENV_STATUS = $ENV_ON ]] ; then
-		echo "$PYENV_NAME"$'\t\t'"ON"
+		echo "$PYENV_NAME"$'\t\t'"$ON_STR"
 	elif [[ $ENV_STATUS = $ENV_OFF ]] ; then
-		echo "$PYENV_NAME"$'\t\t'"OFF"
+		echo "$PYENV_NAME"$'\t\t'"$OFF_STR"
 	elif [[ $ENV_STATUS = $ENV_NEXIST ]] ; then
 		echo "python environment does not exist"
 	elif [[ $ENV_STATUS = $ENV_NO_MANAGER ]] ; then
@@ -383,9 +389,9 @@ function echo_status {
 	fi
 	# Print dummy lab information
 	if [[ $LAB_STATUS =~ $integral ]] ; then
-		echo "dummy lab"$'\t'"ON"
+		echo "dummy lab"$'\t'"$ON_STR"
 	elif [[ $LAB_STATUS = $LAB_OFF ]] ; then
-		echo "dummy lab"$'\t'"OFF"
+		echo "dummy lab"$'\t'"$OFF_STR"
 	else
 		echo "unknown dummy lab status"
 	fi
@@ -552,7 +558,7 @@ function link_labber {
 		# Link the labber installation
 		ln -s $1/Script/Labber $FULL_LINK_PATH
 	elif [[ $ENV_MANAGER = $VIRTUALENV ]] ; then
-		FULL_LINK_PATH=./$PYENV_NAME/lib/python$PYTHON_VERSION/Labber
+		FULL_LINK_PATH=$DYS_PATH/$PYENV_NAME/lib/python$PYTHON_VERSION/Labber
 		if [[ ! -z `readlink $FULL_LINK_PATH` ]] ; then
 			unlink $FULL_LINK_PATH
 		fi

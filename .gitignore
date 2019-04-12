@@ -1,5 +1,9 @@
 ### added by me ###
 
+# Vscode things
+.Vscode
+settings.json
+
 # Personal todo files
 todo*
 TODO*

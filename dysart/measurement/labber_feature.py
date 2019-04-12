@@ -4,16 +4,17 @@ Feature class for objects that interact with the Labber API.
 import os
 import platform
 import Labber
-from Labber import ScriptTools
+from Labber import ScriptTools as st
 from feature import Feature
 
 # Set path to executable. This should be done not-here, but it needs to be put
 # somewhere for now.
+
 try:
     if platform.system() == 'Darwin':
-        ScriptTools.setExePath(os.path.abspath('/Applications/Labber'))
+        st.setExePath(os.path.join(os.path.sep, 'Applications', 'Labber', 'Program'))
     elif platform.system() == 'Linux':
-        pass
+        st.setExePath(os.path.join(os.path.sep, 'usr', 'share', 'Labber', 'Program'))
     else:
         raise Exception('Unsupported platform!')
 except Exception as e:
@@ -21,12 +22,17 @@ except Exception as e:
 
 
 class LabberFeature(Feature):
+    """
+    Feature class specialized for integration with Labber.
 
-    input_file = '.'
+    """
 
-    def __init__(self, output_file, **kwargs):
+    input_file_path = '.'
+
+    def __init__(self, output_file_path, **kwargs):
         super().__init__()
-        self.config = ScriptTools.MeasurementObject(self.input_file, output_file)
+        self.config = st.MeasurementObject(self.input_file_path,
+                                           output_file_path)
 
     def __call__(self, **kwargs):
         """
