@@ -1,5 +1,5 @@
 import json
-from fitting import spectra
+from fitting import spectra, rabi
 from feature import *
 from messages import logged
 from mongoengine import *
@@ -68,9 +68,8 @@ class QubitSpectrum(labber_feature.LabberFeature):
     #def __init__(self):
     #    super().__init__()
 
-    @logged(message='measuring qubit spectrum...', end='')
+    @logged(message='measuring qubit spectrum...', end='\n')
     def __call__(self, level=0):
-        print("I have been called!")
         # TODO: other stuff
         super().__call__()
         # Raw data is now in output_file. Load it into self.data.
@@ -112,15 +111,30 @@ class QubitRabi(labber_feature.LabberFeature):
     Feature object for a Rabi measurement on a qubit.
     """
 
-    data = DictField(default={'fit_results': []})
-    input_file = StringField(default=meas.qubit_rabi_file)
-    output_file = StringField(default=meas.qubit_rabi_file_out)
+    input_file_path = StringField(default=meas.qubit_rabi_file)
+    output_file_path = StringField(default=meas.qubit_rabi_file_out)
+    # Channel names: hardcoded for now.
+    plateau_channel = StringField(
+        default='Multi-Qubit Pulse Generator - Plateau')
+    polarization_Z_channel = StringField( 
+        default='Single-Qubit Simulator - Polarization - Z')
+    #def __init__(self):
+    #    super().__init__()
 
-    @logged(message='measuring qubit rabi...', end='')
-    def __call__(self):
+    @logged(message='measuring qubit rabi...', end='\n')
+    def __call__(self, level=0):
         # TODO: other stuff
-        super().__call__(self)
-        # TODO: other stuff
+        super().__call__()
+        # Raw data is now in output_file. Load it into self.data.
+        log_file = Labber.LogFile(self.output_file_path)
+        num_entries = log_file.getNumberOfEntries()
+        self.data['log'].append(log_file.getEntry(num_entries - 1))
+        # Fit that data and save the result in fit_results.
+        last_entry = self.data['log'][-1]
+        plateau_data = last_entry[self.plateau_channel]
+        polarization_Z_data = last_entry[self.polarization_Z_channel]
+        fit = rabi.fit_rabi(plateau_data, polarization_Z_data)
+        self.data['fit_results'].append(fit.params.valuesdict())
 
     @property
     @refresh
@@ -128,8 +142,8 @@ class QubitRabi(labber_feature.LabberFeature):
         """
         Return the Rabi frequency at the specified drive amplitude
         """
-        # TODO
-        pass
+        last_fit = self.data['fit_results'][-1]
+        return last_fit['freq']
 
     @property
     @refresh
@@ -137,8 +151,9 @@ class QubitRabi(labber_feature.LabberFeature):
         """
         Return the time to perform an X gate at the specified drive amplitude
         """
-        # TODO
-        pass
+        rabi_period = 1/self.frequency
+        return rabi_period/2
+        
 
     @property
     @refresh
@@ -146,8 +161,17 @@ class QubitRabi(labber_feature.LabberFeature):
         """
         Return the time to perform an H gate at the specified drive amplitude
         """
-        # TODO
-        pass
+        rabi_period = 1/self.frequency
+        return rabi_period/4
+
+    @property
+    @refresh
+    def decay_rate(self):
+        """
+        Return the rate at which Rabi oscillations damp out
+        """
+        last_fit = self.data['fit_results'][-1]
+        return last_fit['decay']
 
     @property
     @refresh
@@ -156,8 +180,17 @@ class QubitRabi(labber_feature.LabberFeature):
         Return the Rabi decay time (or more parameters, depending on choice of
         fitting routine)
         """
-        # TODO
-        pass
+        return 1/self.decay_rate
+    
+    @property
+    @refresh
+    def decay_time(self):
+        """
+        Return the Rabi phase. Note that this can be nonzero, depending on the
+        drive pulse shape.
+        """
+        last_fit = self.data['fit_results'][-1]
+        return last_fit['phase']
 
 
 class QubitRelaxation(labber_feature.LabberFeature):
@@ -171,7 +204,7 @@ class QubitRelaxation(labber_feature.LabberFeature):
     input_file = StringField(default='')
     output_file = StringField(default='')
 
-    @logged(message='measuring qubit relaxation...', end='')
+    @logged(message='measuring qubit relaxation...', end='\n')
     def __call__(self):
         # TODO: other stuff
         super().__call__(self)

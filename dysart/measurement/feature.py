@@ -24,7 +24,7 @@ def refresh(fn):
 	"""
 	Decorator that flags a method as having dependencies and possible requiring
 	a refresh operation. Recursively refreshes ancestors, then checks an
-	additional condition `expired()` specified by the Feature class. If the
+	additional condition `__expired__()` specified by the Feature class. If the
 	feature or its ancestors have expired, perform the corrective operation
 	defined by the _______ method.
 
@@ -70,7 +70,7 @@ def refresh(fn):
 				parent_is_stale = parent.touch(level=lvl + 1, is_stale=0)
 				is_stale |= parent_is_stale
 		# If stale for some other reason, also flag to be updated.
-		self_expired = self.expired(level=lvl)
+		self_expired = self.__expired__(level=lvl)
 		is_stale |= self_expired
 		# Call the update-self method, the reason for this wrapper's existence
 		if is_stale:
@@ -143,7 +143,7 @@ class Feature(Document):
 		"""
 		return is_stale
 
-	def expired(self, level=0):
+	def __expired__(self, level=0):
 		"""
 		Check for feature expiration. By default, everything is a twinkie.
 		"""

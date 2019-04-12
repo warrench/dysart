@@ -84,7 +84,7 @@ class LabberFeature(Feature):
     def output_file(self):
         return self.config.sCfgFileIn
 
-    def expired(self, level=0):
+    def __expired__(self, level=0):
         """
         Default expiration condition: is there  a result?
         """

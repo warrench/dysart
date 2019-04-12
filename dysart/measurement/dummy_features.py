@@ -90,7 +90,7 @@ class FizzTimeConst(Feature):
 
 	# Which methods are used to check for expriation and updating the object?
 	__call__ = measure_time_const
-	expired = no_recorded_result
+	__expired__ = no_recorded_result
 
 
 class CarbonatorController(Feature):
@@ -152,4 +152,4 @@ class FizzmeterController(Feature):
 
 	# Which methods are used to check for expriation and updating the object?
 	__call__ = calibrate
-	expired = fizzmeter_uncalibrated
+	__expired__ = fizzmeter_uncalibrated
