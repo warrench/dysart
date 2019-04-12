@@ -4,6 +4,7 @@ the DySART interface working in a final version "in spirit", only maybe written
 a little more cleanly!
 """
 
+import numpy as np
 from fitting.exponential import *
 from feature import *
 from mongoengine import *

@@ -1,9 +1,15 @@
 """
 Feature class for objects that interact with the Labber API.
+Currently, the Labber interface is pretty naive, using the highest-level
+API available. After I really get it "working," it would be nice to speed
+things up by passing in-memory data buffers to reduce the number of writes,
+etc.
 """
+
 import os
 import platform
 import Labber
+from mongoengine import *
 from Labber import ScriptTools as st
 from feature import Feature
 
@@ -20,19 +26,37 @@ try:
 except Exception as e:
     pass
 
+# Connect to default labber client
+# This behavior is all right for testing, but unexpected side effects like this
+# should probably be considered unacceptable in deployed code.
+try:
+    default_client = Labber.connectToServer('localhost')
+    # For now, connect to insruments _here_, rather than on feature init.
+    #for inst in client.getListOfInstrumentsString():
+    #    client.connectToInstrument(inst)
+except Exception as e:
+    default_client = None
+
 
 class LabberFeature(Feature):
     """
     Feature class specialized for integration with Labber.
+    Init takes the address of a labber server as an argument.
 
     """
 
-    input_file_path = '.'
+    data = DictField(default={'log': [], 'fit_results': []})
+    input_file_path = ''
+    output_file_path = ''
 
-    def __init__(self, output_file_path, **kwargs):
+    def __init__(self, labber_client=default_client, **kwargs):
+        if default_client:
+            self.labber_client = default_client
         super().__init__()
+
+        # Deprecated by Simon's changes to Labber API?
         self.config = st.MeasurementObject(self.input_file_path,
-                                           output_file_path)
+                                           self.output_file_path)
 
     def __call__(self, **kwargs):
         """
@@ -59,3 +83,10 @@ class LabberFeature(Feature):
     @property
     def output_file(self):
         return self.config.sCfgFileIn
+
+    def expired(self, level=0):
+        """
+        Default expiration condition: is there  a result?
+        """
+        return (('fit_results' not in self.data)
+                 or not self.data['fit_results'])
