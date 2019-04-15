@@ -18,13 +18,13 @@ DB_NAME=debug_data
 DB_PATH=$DB_NAME/db
 LOG_PATH=$DB_NAME/log
 DB_LOG_FILE=mongodb_$DATETIME.log
-DB_CONNECT_SCRIPT_NAME=connect_db.py
 DUMMY_LAB_SERVER=dummy_server.py
 DYS_LOG_FILE=dysart.log
 PYTHON_VERSION="3.7"
 PYENV_NAME=dysenv
 CONDA=conda
 VIRTUALENV=virtualenv
+PYTHONSTARTUP_SCRIPT=dypy_startup.py
 DB_OFF=db_off
 DB_ON=db_on
 ENV_OFF=env_off
@@ -254,28 +254,6 @@ function start_db {
 	elif [[ $DB_STATUS =~ $integral ]] ; then
 		echo "Database already running."
 	fi
-
-	# Write the db connect script literally, if it does not exist.
-	CONNECT_SCRIPT_PATH=$DYS_PATH/$DB_NAME/$DB_CONNECT_SCRIPT_NAME
-	if [[ ! -f $CONNECT_SCRIPT_PATH ]] ; then
-		# Write connect script. This might be a little opaque, so keep tabs
-		# on it and whether it needs to be documented properly.
-		echo -e \
-"import os, sys\n"\
-"import mongoengine as me\n"\
-"# Open a connection to the Mongo database\n"\
-"host_data = ('localhost', 27017)\n"\
-"me.connect('$DB_NAME',host=host_data[0],port=host_data[1])\n"\
-"sys.path.pop(0)\n"\
-"sys.path.insert(0,os.getcwd())\n"\
-		>> $CONNECT_SCRIPT_PATH
-	fi
-
-	# Run python with database connection (safely!)
-	if [[ -z $(alias | grep python) ]] ; then
-		alias python="echo connecting to database server... &&
-		python -q -i $CONNECT_SCRIPT_PATH"
-	fi
 }
 
 function stop_db {
@@ -289,10 +267,8 @@ function stop_db {
 		echo "Shutting down database server..."
 		kill $DB_STATUS
 		# Temporary safety feature
+    # TODO: figure out if this is necesssary
 		sleep 1
-	fi
-	if [[ ! -z $(alias | grep "python.*$DB_CONNECT_SCRIPT") ]] ; then
-		unalias python
 	fi
 }
 
@@ -325,7 +301,7 @@ function init_dys_log {
 }
 
 function start {
-	# Activate python environment; start db server
+	# Activate python environment
 	if [[ ! -z $STARTED ]] ; then
 		if [[ $STARTED -eq 1 ]] ; then
 			echo "Already on!"
@@ -333,9 +309,13 @@ function start {
 		fi
 	fi
 	activate_env $PYENV_NAME
+  # Make sure the python interpreter's startup script is correct. Keep the old
+  # one so you can restore it on stop.
+  export OLD_PYTHONSTARTUP=$PYTHONSTARTUP
+  export PYTHONSTARTUP=$DYS_PATH/$PYTHONSTARTUP_SCRIPT
+  # Start the database server
 	start_db
-# 	Do not do this for now!
-#	start_lab
+  # Initialize the log
 	init_dys_log
 	export STARTED=1
 }
@@ -344,11 +324,12 @@ function stop {
 	# Deactivate python environment; stop db server
 	if [[ ! -z $STARTED ]] ; then
 		if [[ $STARTED -ne 0 ]] ; then
-			# This doesn't work with MacOS MongoDB
+			# TODO: This doesn't work with MacOS MongoDB
 			deactivate_env
+      # Restore original python startup scrupt
+      export PYTHONSTARTUP=$OLD_PYTHONSTARTUP
+      # Stop the database server
 			stop_db
-			#  Do not do this for now!
-			#  stop_lab
 			export STARTED=0
 		fi
 	else
