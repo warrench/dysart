@@ -4,6 +4,7 @@
 from measurement.equs_features import QubitSpectrum, QubitRabi
 from context import Context
 from measurement.messages import cprint
+from measurement.feature import include_feature
 
 ##############################################
 # Set up the features to do a T1 measurement #
@@ -12,10 +13,12 @@ from measurement.messages import cprint
 cprint('setting up the feature tree... \t\t', status='normal', end='')
 
 # First, the spectrum measurement
-qb_spec = QubitSpectrum(name='qb - spec')
+# qb_spec = QubitSpectrum(name='qb - spec')
+qb_spec = include_feature(QubitSpectrum, 'qb - spec')
 
 # Then the Rabi. Make sure it depends on the transition frequency measured by qb_spec!
-qb_rabi = QubitRabi(name='qb - rabi')
+# qb_rabi = QubitRabi(name='qb - rabi')
+qb_rabi = include_feature(QubitRabi, 'qb - rabi')
 qb_rabi.parents['spec'] = qb_spec
 
 # Then the T1

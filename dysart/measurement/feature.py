@@ -91,6 +91,24 @@ def refresh(fn):
     return wrapped_fn
 
 
+def include_feature(feature_class, query_name):
+    """
+    Either return an existing document, if one exists, or create a new one and
+    return it. 
+
+    Note that this kind of function is deemed unsafe by the mongoengine docs,
+    since MongoDB lacks transactions. This might be an important design
+    consideration, so keep an eye on this.
+    
+    Note that the equivalent deprecated moongoengine function is called
+    `get_or_create`.
+    """
+    doc = feature_class.objects.get(name=query_name)
+    if not doc:
+        doc = feature_class(name=query_name)
+    return doc
+
+
 class Feature(Document):
     """
     Device or component feature class. Each measurement should be implemented
@@ -112,6 +130,7 @@ class Feature(Document):
     parents = DictField(deffault={})
 
     def __init__(self, **kwargs):
+        # Create a new document
         super().__init__(**kwargs)
         self.save()
 
