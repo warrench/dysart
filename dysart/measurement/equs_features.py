@@ -1,12 +1,12 @@
 import json
-from fitting import spectra, rabi
-from feature import *
-from messages import logged
+from .fitting import spectra, rabi
+from .feature import *
+from .messages import logged
 from mongoengine import *
-import labber_feature
+from .labber_feature import LabberFeature
 import Labber
 from Labber import ScriptTools
-import equs_std.measurements as meas
+from .equs_std import measurements as meas
 
 from uncertainties import ufloat  # Return values with error bars!
 from uncertainties.umath import *
@@ -37,7 +37,7 @@ def no_recorded_result(self, level=0):
     return (('fit_results' not in self.data) or not self.data['fit_results'])
 
 
-class ResonatorSpectrum(labber_feature.LabberFeature):
+class ResonatorSpectrum(LabberFeature):
     pass
 
 
@@ -45,7 +45,7 @@ class Qubit:
     pass
 
 
-class QubitSpectrum(labber_feature.LabberFeature):
+class QubitSpectrum(LabberFeature):
     """
     Feature object for the spectrum of a qubit. For the purposes of an initial
     demo, this should really be just an abstraction of a polarization-vs-
@@ -61,7 +61,7 @@ class QubitSpectrum(labber_feature.LabberFeature):
     input_file_path = StringField(default=meas.qubit_spec_file)
     output_file_path = StringField(default=meas.qubit_spec_file_out)
 
-    # Instrument nameS: hardcoded for now.
+    # Instrument names: hardcoded for now.
     pulse_generator = StringField(
         default='Multi-Qubit Pulse Generator - '
     )
@@ -76,8 +76,6 @@ class QubitSpectrum(labber_feature.LabberFeature):
     polarization_Z_channel = StringField( 
         default='Single-Qubit Simulator - Polarization - Z'
     )
-    #def __init__(self):
-    #    super().__init__()
 
     @logged(message='measuring qubit spectrum...', end='\n')
     def __call__(self, level=0):
@@ -118,7 +116,7 @@ class QubitSpectrum(labber_feature.LabberFeature):
         return fwhm
 
 
-class QubitRabi(labber_feature.LabberFeature):
+class QubitRabi(LabberFeature):
     """
     Feature object for a Rabi measurement on a qubit.
     """
@@ -179,7 +177,7 @@ class QubitRabi(labber_feature.LabberFeature):
         """
         rabi_period = 1/self.frequency
         return rabi_period/2
-        
+
 
     @property
     @refresh
@@ -207,7 +205,7 @@ class QubitRabi(labber_feature.LabberFeature):
         fitting routine)
         """
         return 1/self.decay_rate
-    
+
     @property
     @refresh
     def decay_time(self):
@@ -219,7 +217,7 @@ class QubitRabi(labber_feature.LabberFeature):
         return last_fit['phase']
 
 
-class QubitRelaxation(labber_feature.LabberFeature):
+class QubitRelaxation(LabberFeature):
     """
     Feature object for a T1 measurement on a qubit.
     (Actually, it might make sense for the same Feature class to track all the

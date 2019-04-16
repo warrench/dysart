@@ -1,5 +1,8 @@
 ### added by me ###
 
+# Labber scenarios
+.hdf5
+
 # Vscode things
 .Vscode
 settings.json

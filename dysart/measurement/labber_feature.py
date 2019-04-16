@@ -11,7 +11,8 @@ import platform
 import Labber
 from mongoengine import *
 from Labber import ScriptTools as st
-from feature import Feature
+from .feature import Feature
+from context import Context
 
 # Set path to executable. This should be done not-here, but it needs to be put
 # somewhere for now.
@@ -26,16 +27,21 @@ try:
 except Exception as e:
     pass
 
-# Connect to default labber client
-# This behavior is all right for testing, but unexpected side effects like this
-# should probably be considered unacceptable in deployed code.
-try:
-    default_client = Labber.connectToServer('localhost')
-    # For now, connect to insruments _here_, rather than on feature init.
-    #for inst in client.getListOfInstrumentsString():
-    #    client.connectToInstrument(inst)
-except Exception as e:
-    default_client = None
+"""
+Connect to default labber client
+This behavior is all right for testing, but unexpected side effects like this
+should probably be considered unacceptable in deployed code.
+"""
+if Context.labber_client:
+    default_client = Context.labber_client
+else:
+    try:
+        default_client = Labber.connectToServer('localhost')
+        # For now, connect to insruments _here_, rather than on feature init.
+        #for inst in client.getListOfInstrumentsString():
+        #    client.connectToInstrument(inst)
+    except Exception as e:
+        default_client = None
 
 
 class LabberFeature(Feature):
@@ -52,7 +58,7 @@ class LabberFeature(Feature):
     def __init__(self, labber_client=default_client, **kwargs):
         if default_client:
             self.labber_client = default_client
-        super().__init__()
+        super().__init__(**kwargs)
 
         # Deprecated by Simon's changes to Labber API?
         self.config = st.MeasurementObject(self.input_file_path,

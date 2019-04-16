@@ -310,9 +310,12 @@ function start {
 	fi
 	activate_env $PYENV_NAME
   # Make sure the python interpreter's startup script is correct. Keep the old
-  # one so you can restore it on stop.
+  # one so you can restore it on stop. (Should this go in dysenv?)
   export OLD_PYTHONSTARTUP=$PYTHONSTARTUP
   export PYTHONSTARTUP=$DYS_PATH/$PYTHONSTARTUP_SCRIPT
+  # Add to pythonpath
+  export OLD_PYTHONPATH=$PYTHONPATH
+  export PYTHONPATH=$DYS_PATH/dysart
   # Start the database server
 	start_db
   # Initialize the log
@@ -326,8 +329,10 @@ function stop {
 		if [[ $STARTED -ne 0 ]] ; then
 			# TODO: This doesn't work with MacOS MongoDB
 			deactivate_env
-      # Restore original python startup scrupt
+      # Restore original python startup script
       export PYTHONSTARTUP=$OLD_PYTHONSTARTUP
+      # Restore original pythonpath
+      export PYTHONPATH=$OLD_PYTHONPATH
       # Stop the database server
 			stop_db
 			export STARTED=0
@@ -626,5 +631,8 @@ else
 		# Otherwise, print the help string
 		echo_help
 	fi
-
 fi
+
+# Export environment variables
+export DB_STATUS
+

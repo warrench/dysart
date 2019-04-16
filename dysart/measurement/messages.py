@@ -11,6 +11,43 @@ default_logfile_path = os.path.join('..', '..', 'debug_data',
                                     'log', 'dysart.log')
 
 
+class Bcolor:
+    """
+    Enum class for colored printing
+    """
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
+def cstr(s, status='normal'):
+    """
+    Wrap a string with ANSI color annotations
+    """
+    if status == 'ok':
+        return Bcolor.OKGREEN + s + Bcolor.ENDC
+    elif status == 'fail':
+        return Bcolor.FAIL + s + Bcolor.ENDC
+    elif status == 'warn':
+        return Bcolor.WARNING + s + Bcolor.ENDC
+    elif status == 'bold':
+        return Bcolor.BOLD + s + Bcolor.ENDC
+    elif status == 'underline':
+        return Bcolor.UNDERLINE + s + Bcolor.ENDC
+    else:
+        return s
+
+def cprint(s, status='normal', **kwargs):
+    """
+    Print a string with ANSI color annotations
+    """
+    print(cstr(s, status), **kwargs)
+
 def msg1(message, level=0, end="\n"):
     """
     Print a formatted message to stdout.
