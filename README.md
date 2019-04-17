@@ -43,7 +43,7 @@ simple virtual qubit measurements. Run a Labber InstrumentServer serving a
 Single-Qubit Simulator and a Multi-Qubit Pulse Generator, and try running the
 following example:
 
-![qubit measurement example](https://github.com/mcncm/dysart/assets/dys_example.png)]
+![qubit measurement example](assets/dys_example.png)
 
 ## (Semi-)stable features
 
@@ -116,7 +116,8 @@ manually on a Windows machine.
 ## Desiderata
 * High-level abstractions for device characterization and device data management
 * Command line tools for measurement
-  * e.g. `$ tuneup fridge1/chip1/qb1` to update resonator frequencies, inter-qubit crosstalk; ![](.img/pi.gif)-pulse, ![](.img/T1T2.gif)...
+  * e.g. `$ tuneup fridge1/chip1/qb1` to update resonator frequencies,
+  * inter-qubit crosstalk; ![](assets/pi.gif)-pulse, ![](assets/T1T2.gif)...
 
 ### Where we don't want to reinvent the wheel
 * Labber backend
