@@ -94,18 +94,25 @@ def refresh(fn):
 def include_feature(feature_class, query_name):
     """
     Either return an existing document, if one exists, or create a new one and
-    return it. 
+    return it.
 
     Note that this kind of function is deemed unsafe by the mongoengine docs,
     since MongoDB lacks transactions. This might be an important design
     consideration, so keep an eye on this.
-    
+
     Note that the equivalent deprecated moongoengine function is called
     `get_or_create`.
+
+    Note, further, that it maybe considered poor practice to rely on an
+    exception as an ordinary application logic signal.
     """
-    doc = feature_class.objects.get(name=query_name)
-    if not doc:
+    try:
+        doc = feature_class.objects.get(name=query_name)
+    except DoesNotExist:
         doc = feature_class(name=query_name)
+    except MultipleObjectsReturned:
+        # Don't do anything yet; just propagate the exception
+        raise MultipleObjectsReturned
     return doc
 
 

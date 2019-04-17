@@ -42,7 +42,7 @@ ON_STR="${fg_green}ON${reset}"
 OFF_STR="${fg_red}OFF${reset}"
 
 #TODO: retrieve this list externally!
-REQUIREMENTS={numpy,lmfit,pymongo,mongoengine,h5py,jsonschema,matplotlib,pint}
+REQUIREMENTS={numpy,lmfit,pymongo,mongoengine,h5py,jsonschema,matplotlib,pint,pyqt5}
 CONDA_REQUIREMENTS={python.app,}
 VIRTUALENV_REQUIREMENTS={}
 
@@ -51,16 +51,17 @@ integral='^[0-9]+$'
 
 function echo_help {
 	echo "Here are some dysart commands you can try out:"
-	echo $'\t'"on"$'\t\t\t'"start python environment and database"
-	echo $'\t'"off"$'\t\t\t'"stop python environment and database"
+	echo $'\t'"on"$'\t\t\t\t'"start python environment and database"
+	echo $'\t'"off"$'\t\t\t\t'"stop python environment and database"
 	echo $'\t'"restart"$'\t\t\t'"cycle the system: turn it off and on again"
 	echo $'\t'"help"$'\t\t\t'"this help page"
 	echo $'\t'"labber"$'\t\t\t'"link Labber to DySART"
 	echo $'\t'"status"$'\t\t\t'"the status of installed services"
+  echo $'\t'"log"$'\t\t\t\t'"read the dysart log file"
 	echo $'\t'"clean"
-	echo $'\t\t'"env"$'\t\t'"remove python environment"
-	echo $'\t\t'"db"$'\t\t'"clear database"
-	echo $'\t\t'"log"$'\t\t'"clear log files"
+	echo $'\t\t'"env"$'\t\t\t'"remove python environment"
+	echo $'\t\t'"db"$'\t\t\t'"clear database"
+	echo $'\t\t'"log"$'\t\t\t'"clear log files"
 	echo $'\t\t'"profile"$'\t\t'"remove modifications to bash profile"
 	echo $'\t\t'"hard"$'\t\t'"all of the above"
 	echo $'\t'"uninstall"$'\t\t'"the hardest clean"
@@ -156,12 +157,14 @@ function activate_env {
 	# Activate the correct environment.
 	ENV_MANAGER=`find_env_manager`
 	if [[ $ENV_MANAGER = $CONDA ]] ; then
-		echo "Activating python environment..."
+		printf "activating python environment... \t\t"
 		conda activate $1
+    printf "\033[92m done.\033[0m\n"
 	elif [[ $ENV_MANAGER = $VIRTUALENV ]]; then
 		# Just activate the environment.
-		echo "Activating python environment..."
+		printf "activating python environment... \t\t"
 		source $DYS_PATH/$1/bin/activate
+    printf "\033[92m done.\033[0m\n"
 	else
 		echo "There appears to be no python \\
 		environment management tool installed."
@@ -174,10 +177,10 @@ function deactivate_env {
 	# Deactivate the correct environment.
 	ENV_MANAGER=`find_env_manager`
 	if [[ $ENV_MANAGER = $CONDA ]] ; then
-		echo "Deactivating python environment..."
+		echo "deactivating python environment..."
 		conda deactivate
 	elif [[ $ENV_MANAGER = $VIRTUALENV ]] ; then
-		echo "Deactivating python environment..."
+		echo "deactivating python environment..."
 		deactivate
 	else
 		echo "There appears to be no python \\
@@ -245,14 +248,15 @@ function start_db {
 	# Run the mongodb database
 	DB_STATUS=`db_get_status`
 	if [[ $DB_STATUS = $DB_OFF ]] ; then
-		echo "Starting database on default port... "
+		printf "starting database on default port... \t"
 		mongod --quiet --logpath $DYS_PATH/$LOG_PATH/$DB_LOG_FILE\
 		 --dbpath $DYS_PATH/$DB_PATH &
+    printf "\033[92m done.\033[0m\n"
 	# If DB_STATUS is a positive integer, it's a process id.
 	# This could be considered bad practice leaking in, since db_get_status
 	# doesn't have a single, well-defined return type.
 	elif [[ $DB_STATUS =~ $integral ]] ; then
-		echo "Database already running."
+		echo "database already running."
 	fi
 }
 
@@ -355,17 +359,17 @@ function echo_status {
 	LAB_STATUS=$(lab_get_status)
 	# Print db server information
 	if [[ $DB_STATUS =~ $integral ]] ; then
-		echo "database "$'\t'"$ON_STR"
+		echo "database "$'\t\t\t\t\t\t\t\t'" $ON_STR"
 	elif [[ $DB_STATUS = $DB_OFF ]] ; then
-		echo "database"$'\t'"$OFF_STR"
+		echo "database"$'\t\t\t\t\t\t\t\t'" $OFF_STR"
 	else
 		echo "unknown database status"
 	fi
 	# Print python environment information
 	if [[ $ENV_STATUS = $ENV_ON ]] ; then
-		echo "$PYENV_NAME"$'\t\t'"$ON_STR"
+		echo "$PYENV_NAME"$'\t\t\t\t\t\t\t\t\t'" $ON_STR"
 	elif [[ $ENV_STATUS = $ENV_OFF ]] ; then
-		echo "$PYENV_NAME"$'\t\t'"$OFF_STR"
+		echo "$PYENV_NAME"$'\t\t\t\t\t\t\t\t\t'" $OFF_STR"
 	elif [[ $ENV_STATUS = $ENV_NEXIST ]] ; then
 		echo "python environment does not exist"
 	elif [[ $ENV_STATUS = $ENV_NO_MANAGER ]] ; then
@@ -375,9 +379,9 @@ function echo_status {
 	fi
 	# Print dummy lab information
 	if [[ $LAB_STATUS =~ $integral ]] ; then
-		echo "dummy lab"$'\t'"$ON_STR"
+		echo "dummy lab"$'\t\t\t\t\t\t\t\t'" $ON_STR"
 	elif [[ $LAB_STATUS = $LAB_OFF ]] ; then
-		echo "dummy lab"$'\t'"$OFF_STR"
+		echo "dummy lab"$'\t\t\t\t\t\t\t\t'" $OFF_STR"
 	else
 		echo "unknown dummy lab status"
 	fi
@@ -463,6 +467,12 @@ function clean_log {
 	fi
 	# Restart database server again
 	start_db
+}
+
+function read_log {
+  # Display the log contents
+	FULL_LOG_PATH=$DYS_PATH/$DB_NAME/log
+  less $FULL_LOG_PATH/$DYS_LOG_FILE
 }
 
 function get_profile {
@@ -611,6 +621,7 @@ if [[ $# -ne 0 ]]; then
 
 		help)	echo_help					;;
 		status)	echo_status					;;
+    log)	  	read_log              ;;
 
 		install)	install					;;
 		uninstall)	uninstall				;;

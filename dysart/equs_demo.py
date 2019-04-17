@@ -25,4 +25,4 @@ qb_rabi.parents['spec'] = qb_spec
 #qb_relax = QubitRelaxation(qubit_relax_file).add_parents(qb_rabi)
 #qb_relax.rabi = qb_rabi # ibid
 
-cprint('done.', status='ok', end='\n')
+cprint(' done.', status='ok', end='\n')

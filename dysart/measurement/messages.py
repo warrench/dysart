@@ -7,7 +7,7 @@ import os
 import datetime as dt
 from functools import wraps
 
-default_logfile_path = os.path.join('..', '..', 'debug_data',
+default_logfile_path = os.path.join(os.environ['DYS_PATH'], 'debug_data',
                                     'log', 'dysart.log')
 
 
@@ -79,8 +79,7 @@ def write_log(message, logfile):
     # TODO: use python standard library logging API to log message "correctly"
     separator = ' | '
     prefix = dt.datetime.now().ctime() + separator
-    fullpath = os.path.join(os.path.dirname(__file__), logfile)
-    with open(fullpath, 'a') as f:
+    with open(logfile, 'a') as f:
         f.write(prefix + message + '\n')
 
 

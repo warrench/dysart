@@ -58,7 +58,7 @@ def db_connect(host_name, host_port):
     if os.environ['DB_STATUS'] != 'db_off':
         # Check whether the database server is running.
         try:
-            cprint('connecting to database server...\t', end='')
+            cprint('connecting to database server... \t\t', end='')
             # Open a connection to the Mongo database
             mongo_client = me.connect('debug_data', host=host_name, port=host_port)
             """ Do the following lines do anything useful? """ 
@@ -80,7 +80,7 @@ def labber_connect(host_name):
     Return a labber client to the default instrument server.
     """
     try:
-        cprint('connecting to instrument server... \t', end='')
+        cprint('connecting to instrument server... \t\t', end='')
         labber_client = Labber.connectToServer('localhost')
         cprint(' done.', status='ok')
         return labber_client
