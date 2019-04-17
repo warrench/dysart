@@ -4,11 +4,6 @@ I think the picture of what this package is supposed to do is _starting_ to
 come into focus. The meat of DySART should consist of a set of extensible fitting tools, a measurement dependency and precedence resolution algorithm, and a job scheduler,
 as well a number of (yet undefined) interfaces to a database system, an instrument controller and users.
 
-The exact scope of the package is a pretty open question. It might end up as a fairly lean set of core utilities,
-or as a more fully-featured system. This is something to feel out and discuss as the needs of the lab
-and the lab workflow become more clear. The exact relationship to Labber and Labber Quantum is also an open
-question, but one probably not worth resolving until there is more substance here.
-
 Note that many features in this package depend on using python 3. The
 configuration script will attempt to use python 3.7.
 
@@ -29,16 +24,26 @@ package managers (including apt and pacman) should also supply an up-to-date
 version of MongoDB.
 
 To set up the database and python environment, enter the top-level `dysart`
-directory and run `$ . config`. It is imperative that you run this command
-verbatim in this directory. Follow the prompts, and it should set up all the
-components for you. You should now be able to run other dysart commands with `$
-dys <command>` from any working directory.
+directory and run `$ . config` in bash (unfortunately, other shells are
+currently unsupported.) It is imperative that you run this command verbatim
+in this directory. Follow the prompts, and it should set up all the
+components for you, including the python virtual environment, python packages,
+and skeletons of the database and log. Among other prompts, you will be asked
+for permission to modify your `.bashrc` or `.bash_profile.` This modification
+will alias the dysart scripts to `dys`, which for the time being I've
+considered the least-invasive installation option.
+If the installation succeeds, you should now be able to run other dysart
+commands with `$ dys <command>` from any working directory.
 
 If you want to use Labber facilities, you can link DySART to your Labber
 installation by running `$ dys labber /path/to/Labber`.
 
-Now you should be all set. To see what the software can do, try opening
-`dysart/measurement/dummy_measurement.py` in a Jupyter or Hydrogen notebook!
+Now you should be all set. To see what the software can do, you can try some
+simple virtual qubit measurements. Run a Labber InstrumentServer serving a
+Single-Qubit Simulator and a Multi-Qubit Pulse Generator, and try running the
+following example:
+
+![qubit measurement example](https://github.com/mcncm/dysart/assets/dys_example.png)]
 
 ## (Semi-)stable features
 
@@ -78,6 +83,12 @@ database log, and whole database, respectively.
 
 * To see a list of commands, run `$ dys` or `$ dys help`.
 
+### DyPy interpreter setup
+Under Dysart, a special $PYTHONSTARTUP script is run to provide the user a
+consistent interavtive programming environment. At the moment, this
+script connects to a default database and Labber InstrumentServer,
+and making these assets accessible to the other system components.
+
 ### Dummy measurements
 The "dummy lab" in `dysart/measurements` provides a model of some of the
 desired end-state functionality. This virtual lab setting provides a collection
@@ -103,14 +114,9 @@ so the python environment and database will currently have to be configured
 manually on a Windows machine.
 
 ## Desiderata
-* Interface to existing Labber-based measurement tools
-* Unified fitting tools based on lmfit API
-    * Emphasis on robustness. Should operate reliably and predictably on any conceivable real data from the experiments.
 * High-level abstractions for device characterization and device data management
 * Command line tools for measurement
   * e.g. `$ tuneup fridge1/chip1/qb1` to update resonator frequencies, inter-qubit crosstalk; ![](.img/pi.gif)-pulse, ![](.img/T1T2.gif)...
-  * intelligently handle calibration dependencies
-  * log calibration snapshots or deltas referenced to existing log files
 
 ### Where we don't want to reinvent the wheel
 * Labber backend

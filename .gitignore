@@ -1,5 +1,8 @@
 ### added by me ###
 
+# Mac stuff
+.DS_Store
+
 # Swap files
 *.swp
 
