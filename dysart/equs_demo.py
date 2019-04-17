@@ -10,7 +10,7 @@ from measurement.feature import include_feature
 # Set up the features to do a T1 measurement #
 ##############################################
 
-cprint('setting up the feature tree... \t\t', status='normal', end='')
+cprint('setting up the feature tree...'.ljust(48), status='normal', end='')
 
 # First, the spectrum measurement
 # qb_spec = QubitSpectrum(name='qb - spec')
@@ -25,5 +25,5 @@ qb_rabi.parents['spec'] = qb_spec
 #qb_relax = QubitRelaxation(qubit_relax_file).add_parents(qb_rabi)
 #qb_relax.rabi = qb_rabi # ibid
 
-cprint(' done.', status='ok', end='\n')
-print(qb_rabi.__repr__())
+cprint('done.', status='ok', end='\n')
+print('\n' + qb_rabi.__repr__() + '\n')

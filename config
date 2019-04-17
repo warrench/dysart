@@ -160,12 +160,12 @@ function activate_env {
 	if [[ $ENV_MANAGER = $CONDA ]] ; then
 		printf "%-"$STATUS_COL"s" "activating python environment..."
 		conda activate $1
-    	printf "\033[92m done.\033[0m\n"
+    	printf "\033[92mdone.\033[0m\n"
 	elif [[ $ENV_MANAGER = $VIRTUALENV ]]; then
 		# Just activate the environment.
 		printf "%-"$STATUS_COL"s" "activating python environment..."
 		source $DYS_PATH/$1/bin/activate
-    	printf "\033[92m done.\033[0m\n"
+    	printf "\033[92mdone.\033[0m\n"
 	else
 		echo "There appears to be no python \\
 		environment management tool installed."
@@ -180,10 +180,10 @@ function deactivate_env {
  	printf "%-"$STATUS_COL"s" "deactivating python environment..."
 	if [[ $ENV_MANAGER = $CONDA ]] ; then
 		conda deactivate 
-    	printf "\033[92m done.\033[0m\n"
+    	printf "\033[92mdone.\033[0m\n"
 	elif [[ $ENV_MANAGER = $VIRTUALENV ]] ; then
 		deactivate 
-    	printf "\033[92m done.\033[0m\n"
+    	printf "\033[92mdone.\033[0m\n"
 	else
 		echo "There appears to be no python \\
 		environment management tool installed."
@@ -216,7 +216,7 @@ function env_get_status {
 		ENV_STATUS=$ENV_NO_MANAGER
 	fi
 
-	echo $ENV_STATUS
+  export ENV_STATUS
 }
 
 function db_get_status {
@@ -229,7 +229,7 @@ function db_get_status {
 		DB_STATUS=$DB_OFF
 	fi
 
-	echo $DB_STATUS
+	export DB_STATUS
 }
 
 function lab_get_status {
@@ -243,29 +243,30 @@ function lab_get_status {
 	else
 		LAB_STATUS=$PID
 	fi
-	echo $LAB_STATUS
+	export LAB_STATUS
 }
 
 function start_db {
 	# Run the mongodb database
-	DB_STATUS=`db_get_status`
+	db_get_status
 	if [[ $DB_STATUS = $DB_OFF ]] ; then
 		printf "%-"$STATUS_COL"s" "starting database on default port..."
 		mongod --quiet --logpath $DYS_PATH/$LOG_PATH/$DB_LOG_FILE\
 		 --dbpath $DYS_PATH/$DB_PATH &
-    printf "\033[92m done.\033[0m\n"
+    printf "\033[92mdone.\033[0m\n"
 	# If DB_STATUS is a positive integer, it's a process id.
 	# This could be considered bad practice leaking in, since db_get_status
 	# doesn't have a single, well-defined return type.
 	elif [[ $DB_STATUS =~ $integral ]] ; then
 		echo "database already running."
 	fi
+  db_get_status
 }
 
 function stop_db {
 	# This doesn't work with MacOS/MongoDB:
 	# mongod --shutdown --dbpath $DB_PATH
-	DB_STATUS=`db_get_status`
+	db_get_status
 	if [[ $DB_STATUS = $DB_OFF ]] ; then
 		echo "database already off."
 	# Check to see if $DB_STATUS corresponds to a process id; if so, kill it.
@@ -276,6 +277,7 @@ function stop_db {
     # TODO: figure out if this is necesssary
 		sleep 1
 	fi
+  db_get_status
 }
 
 function start_lab {
@@ -289,7 +291,7 @@ function start_lab {
 }
 
 function stop_lab {
-	LAB_STATUS=`lab_get_status`
+	lab_get_status
 	if [[ $LAB_STATUS =~ $numeric ]] ; then
 		# LAB_STATUS is a process id
 		echo "Shutting down dummy lab server..."
@@ -297,6 +299,7 @@ function stop_lab {
 	else
 		echo "Dummy lab already off."
 	fi
+  lab_get_status
 }
 
 function init_dys_log {
@@ -356,9 +359,9 @@ function restart {
 
 function echo_status {
 	# Prints status information on db server and python environment
-	DB_STATUS=$(db_get_status)
-	ENV_STATUS=$(env_get_status)
-	LAB_STATUS=$(lab_get_status)
+	db_get_status
+	env_get_status
+	lab_get_status
 	# Print db server information
 	if [[ $DB_STATUS =~ $integral ]] ; then
 		printf "%-"$STATUS_COL"s%s\n" database $ON_STR
