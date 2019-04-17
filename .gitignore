@@ -1,7 +1,10 @@
 ### added by me ###
 
+# Swap files
+*.swp
+
 # Labber scenarios
-.hdf5
+*_out.hdf5
 
 # Vscode things
 .Vscode

@@ -14,11 +14,11 @@ cprint('setting up the feature tree... \t\t', status='normal', end='')
 
 # First, the spectrum measurement
 # qb_spec = QubitSpectrum(name='qb - spec')
-qb_spec = include_feature(QubitSpectrum, 'qb - spec')
+qb_spec = include_feature(QubitSpectrum, 'qb_spec')
 
 # Then the Rabi. Make sure it depends on the transition frequency measured by qb_spec!
 # qb_rabi = QubitRabi(name='qb - rabi')
-qb_rabi = include_feature(QubitRabi, 'qb - rabi')
+qb_rabi = include_feature(QubitRabi, 'qb_rabi')
 qb_rabi.parents['spec'] = qb_spec
 
 # Then the T1
@@ -26,3 +26,4 @@ qb_rabi.parents['spec'] = qb_spec
 #qb_relax.rabi = qb_rabi # ibid
 
 cprint(' done.', status='ok', end='\n')
+print(qb_rabi.__repr__())

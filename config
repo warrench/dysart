@@ -40,6 +40,7 @@ fg_green="$(tput setaf 2)"
 reset="$(tput sgr0)"
 ON_STR="${fg_green}ON${reset}"
 OFF_STR="${fg_red}OFF${reset}"
+export STATUS_COL=48
 
 #TODO: retrieve this list externally!
 REQUIREMENTS={numpy,lmfit,pymongo,mongoengine,h5py,jsonschema,matplotlib,pint,pyqt5}
@@ -157,14 +158,14 @@ function activate_env {
 	# Activate the correct environment.
 	ENV_MANAGER=`find_env_manager`
 	if [[ $ENV_MANAGER = $CONDA ]] ; then
-		printf "activating python environment... \t\t"
+		printf "%-"$STATUS_COL"s" "activating python environment..."
 		conda activate $1
-    printf "\033[92m done.\033[0m\n"
+    	printf "\033[92m done.\033[0m\n"
 	elif [[ $ENV_MANAGER = $VIRTUALENV ]]; then
 		# Just activate the environment.
-		printf "activating python environment... \t\t"
+		printf "%-"$STATUS_COL"s" "activating python environment..."
 		source $DYS_PATH/$1/bin/activate
-    printf "\033[92m done.\033[0m\n"
+    	printf "\033[92m done.\033[0m\n"
 	else
 		echo "There appears to be no python \\
 		environment management tool installed."
@@ -176,12 +177,13 @@ function deactivate_env {
 	# Figure out how environments are managedl
 	# Deactivate the correct environment.
 	ENV_MANAGER=`find_env_manager`
+ 	printf "%-"$STATUS_COL"s" "deactivating python environment..."
 	if [[ $ENV_MANAGER = $CONDA ]] ; then
-		echo "deactivating python environment..."
-		conda deactivate
+		conda deactivate 
+    	printf "\033[92m done.\033[0m\n"
 	elif [[ $ENV_MANAGER = $VIRTUALENV ]] ; then
-		echo "deactivating python environment..."
-		deactivate
+		deactivate 
+    	printf "\033[92m done.\033[0m\n"
 	else
 		echo "There appears to be no python \\
 		environment management tool installed."
@@ -248,7 +250,7 @@ function start_db {
 	# Run the mongodb database
 	DB_STATUS=`db_get_status`
 	if [[ $DB_STATUS = $DB_OFF ]] ; then
-		printf "starting database on default port... \t"
+		printf "%-"$STATUS_COL"s" "starting database on default port..."
 		mongod --quiet --logpath $DYS_PATH/$LOG_PATH/$DB_LOG_FILE\
 		 --dbpath $DYS_PATH/$DB_PATH &
     printf "\033[92m done.\033[0m\n"
@@ -265,10 +267,10 @@ function stop_db {
 	# mongod --shutdown --dbpath $DB_PATH
 	DB_STATUS=`db_get_status`
 	if [[ $DB_STATUS = $DB_OFF ]] ; then
-		echo "Database already off."
+		echo "database already off."
 	# Check to see if $DB_STATUS corresponds to a process id; if so, kill it.
 	elif [[ $DB_STATUS =~ $integral ]] ; then
-		echo "Shutting down database server..."
+		echo "shutting down database server..."
 		kill $DB_STATUS
 		# Temporary safety feature
     # TODO: figure out if this is necesssary
@@ -359,17 +361,17 @@ function echo_status {
 	LAB_STATUS=$(lab_get_status)
 	# Print db server information
 	if [[ $DB_STATUS =~ $integral ]] ; then
-		echo "database "$'\t\t\t\t\t\t\t\t'" $ON_STR"
+		printf "%-"$STATUS_COL"s%s\n" database $ON_STR
 	elif [[ $DB_STATUS = $DB_OFF ]] ; then
-		echo "database"$'\t\t\t\t\t\t\t\t'" $OFF_STR"
+		printf "%-"$STATUS_COL"s%s\n" database $OFF_STR
 	else
 		echo "unknown database status"
 	fi
 	# Print python environment information
 	if [[ $ENV_STATUS = $ENV_ON ]] ; then
-		echo "$PYENV_NAME"$'\t\t\t\t\t\t\t\t\t'" $ON_STR"
+		printf "%-"$STATUS_COL"s%s\n" $PYENV_NAME $ON_STR
 	elif [[ $ENV_STATUS = $ENV_OFF ]] ; then
-		echo "$PYENV_NAME"$'\t\t\t\t\t\t\t\t\t'" $OFF_STR"
+		printf "%-"$STATUS_COL"s%s\n" $PYENV_NAME $OFF_STR
 	elif [[ $ENV_STATUS = $ENV_NEXIST ]] ; then
 		echo "python environment does not exist"
 	elif [[ $ENV_STATUS = $ENV_NO_MANAGER ]] ; then
@@ -379,9 +381,9 @@ function echo_status {
 	fi
 	# Print dummy lab information
 	if [[ $LAB_STATUS =~ $integral ]] ; then
-		echo "dummy lab"$'\t\t\t\t\t\t\t\t'" $ON_STR"
+		printf "%-"$STATUS_COL"s%s\n" "dummy lab" $ON_STR
 	elif [[ $LAB_STATUS = $LAB_OFF ]] ; then
-		echo "dummy lab"$'\t\t\t\t\t\t\t\t'" $OFF_STR"
+		printf "%-"$STATUS_COL"s%s\n" "dummy lab" $OFF_STR
 	else
 		echo "unknown dummy lab status"
 	fi

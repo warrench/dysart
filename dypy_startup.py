@@ -51,6 +51,12 @@ messages_spec.loader.exec_module(messages)
 cprint = messages.cprint
 # </shame>
 
+"""
+Constant definitions
+"""
+# The number of characters in the left-hand column of status lines
+status_col = int(os.environ['STATUS_COL'])
+
 def db_connect(host_name, host_port):
     """
     Set up database client for python interpreter.
@@ -58,31 +64,30 @@ def db_connect(host_name, host_port):
     if os.environ['DB_STATUS'] != 'db_off':
         # Check whether the database server is running.
         try:
-            cprint('connecting to database server... \t\t', end='')
+            cprint('connecting to database server...'.ljust(status_col), end='')
             # Open a connection to the Mongo database
             mongo_client = me.connect('debug_data', host=host_name, port=host_port)
             """ Do the following lines do anything useful? """ 
             sys.path.pop(0)
             sys.path.insert(0, os.getcwd())
-            cprint(' done.', status='ok')
+            cprint('done.', status='ok')
             return mongo_client
         except Exception as e:
             # TODO: replace this with a less general exception.
             cprint(' failed to connect to database.', status='fail')
+			
             return None
     else:
         cprint('database server is off.', status='warn')
         return None
 
-
 def labber_connect(host_name):
     """
-    Return a labber client to the default instrument server.
-    """
+    Return a labber client to the default instrument server.  """
     try:
-        cprint('connecting to instrument server... \t\t', end='')
+        cprint('connecting to instrument server...'.ljust(status_col), end='')
         labber_client = Labber.connectToServer('localhost')
-        cprint(' done.', status='ok')
+        cprint('done.', status='ok')
         return labber_client
     except Exception as e:
         # TODO: replace this with a less general exception.

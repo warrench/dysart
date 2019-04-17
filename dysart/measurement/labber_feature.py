@@ -19,7 +19,7 @@ from context import Context
 
 try:
     if platform.system() == 'Darwin':
-        st.setExePath(os.path.join(os.path.sep, 'Applications', 'Labber', 'Program'))
+        st.setExePath(os.path.join(os.path.sep, 'Applications', 'Labber'))
     elif platform.system() == 'Linux':
         st.setExePath(os.path.join(os.path.sep, 'usr', 'share', 'Labber', 'Program'))
     else:
