@@ -88,6 +88,7 @@ def refresh(fn):
         # Finally, pass along return value of fn: this wrapper should be purely
         # impure
         return return_value
+    wrapped_fn.is_property = True
     return wrapped_fn
 
 
@@ -141,11 +142,19 @@ class Feature(Document):
         super().__init__(**kwargs)
         self.save()
 
-    def __repr__(self):
+    def __status__(self):
         """
-        string representation of Feature class. This should be useful for
-        interactive programming and debugging, to understand the structure of
-        the Feature DAG.
+        returns a pretty-printed string containing detailed information about
+        the feature's current status; e.g. the details of recently-found
+        fitting parameters.
+        """
+        return ''
+        
+    def __str__(self):
+        """
+        human-readable string representation of Feature class. This should be
+        useful for interactive programming and debugging, and to understand the
+        structure of the Feature DAG.
 
         Should report its name, most-derived (?) type, parents, and names and
         expiration statuses thereof.
@@ -156,13 +165,16 @@ class Feature(Document):
             s = cstr(self.name, 'fail')
         else:
             s = cstr(self.name, 'ok')
-        # This Feature's status line 
+        # Descriptor of this feature
         s +=  '\t: ' + cstr(self.__class__.__name__, 'bold')
-
+        # This feature's status
+        status = self.__status__()
+        if status:
+                s += '\n' + status
         if self.parents:
             s += '\n\t'
             for p in self.parents.values():
-                parent_str = p.__repr__()
+                parent_str = p.__str__()
                 s += '\n\t'.join(parent_str.split('\n'))
 
         return s

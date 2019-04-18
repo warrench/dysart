@@ -11,6 +11,7 @@
 
 # Vscode things
 .Vscode
+.vscode
 settings.json
 
 # Personal todo files

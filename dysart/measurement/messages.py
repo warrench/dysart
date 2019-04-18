@@ -22,6 +22,7 @@ class Bcolor:
     FAIL = '\033[91m'
     ENDC = '\033[0m'
     BOLD = '\033[1m'
+    ITALIC = '\033[3m'
     UNDERLINE = '\033[4m'
 
 
@@ -37,6 +38,8 @@ def cstr(s, status='normal'):
         return Bcolor.WARNING + s + Bcolor.ENDC
     elif status == 'bold':
         return Bcolor.BOLD + s + Bcolor.ENDC
+    elif status == 'italic':
+        return Bcolor.ITALIC + s + Bcolor.ENDC
     elif status == 'underline':
         return Bcolor.UNDERLINE + s + Bcolor.ENDC
     else:

@@ -12,6 +12,7 @@ import Labber
 from mongoengine import *
 from Labber import ScriptTools as st
 from .feature import Feature
+from .messages import cstr
 from context import Context
 
 # Set path to executable. This should be done not-here, but it needs to be put
@@ -64,6 +65,26 @@ class LabberFeature(Feature):
         self.config = st.MeasurementObject(self.input_file_path,
                                            self.output_file_path)
 
+    def __status__(self):
+        """
+        Verbose status string should contain recent fit results;
+        or, if there are none, the empty string
+        """
+        def strrep_val(x):
+            return str(x)
+
+        s = ''
+        if not self.data['fit_results']:
+            return s
+
+        last_fit = self.data['fit_results'][-1]
+        max_len = max(map(len, last_fit.keys()))  # longest param name 
+        for param in last_fit:
+            s += cstr(param.ljust(max_len, ' '), 'italic') + ' : ' +\
+                 strrep_val(last_fit[param]) + '\n'
+        return s
+
+        
     def __call__(self, **kwargs):
         """
         Thinly wrap the Labber API
