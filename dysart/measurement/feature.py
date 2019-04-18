@@ -73,6 +73,10 @@ def refresh(fn):
         # If stale for some other reason, also flag to be updated.
         self_expired = self.__expired__(level=lvl)
         is_stale |= self_expired
+        is_stale |= self.manual_expiration_switch
+        # If this line is in a later place, __call__ is called twice. You need
+        # to understand why.
+        self.manual_expiration_switch = False
         # Call the update-self method, the reason for this wrapper's existence
         if is_stale:
             self(level=lvl)
@@ -84,6 +88,7 @@ def refresh(fn):
         # Call the requested function!
         return_value = fn(*args, **kwargs)
         # Save any changes to the database
+        # self.manual_expiration_switch = False
         self.save()
         # Finally, pass along return value of fn: this wrapper should be purely
         # impure
@@ -140,6 +145,7 @@ class Feature(Document):
         # Create a new document
         super().__init__(**kwargs)
         self.save()
+        self.manual_expiration_switch = False
 
     def __repr__(self):
         """
@@ -152,7 +158,7 @@ class Feature(Document):
         """
         s = ''
         # Initialize as object name with type judgment
-        if self.__expired__():
+        if self.__expired__() | self.manual_expiration_switch:
             s = cstr(self.name, 'fail')
         else:
             s = cstr(self.name, 'ok')
@@ -202,6 +208,12 @@ class Feature(Document):
         """
 
         return False
+
+    def set_expired(self, is_expired):
+        """
+        Provide an interface to manually set the expiration state of a feature.
+        """
+        self.manual_expiration_switch = is_expired
 
     def update(self):
         pass
