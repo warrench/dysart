@@ -102,7 +102,8 @@ class LabberFeature(Feature):
         """
         Simply wrap the Labber API
         """
-        self.config.updateValue('label', value)
+        self.config.updateValue(label, value)
+        self.set_expired(True)
 
     @property
     def input_file(self):

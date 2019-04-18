@@ -124,7 +124,7 @@ class QubitRabi(LabberFeature):
     input_file_path = StringField(default=meas.qubit_rabi_file)
     output_file_path = StringField(default=meas.qubit_rabi_file_out)
 
-    # Instrument nameS: hardcoded for now.
+    # Instrument names: hardcoded for now.
     pulse_generator = StringField(
         default='Multi-Qubit Pulse Generator - '
     )
