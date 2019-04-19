@@ -77,7 +77,7 @@ class QubitSpectrum(LabberFeature):
         default='Single-Qubit Simulator - Polarization - Z'
     )
 
-    @logged(message='measuring qubit spectrum...', end='\n')
+    @logged(message='measuring qubit spectrum', end='\n')
     def __call__(self, level=0):
         # TODO: other stuff
         super().__call__()
@@ -140,7 +140,7 @@ class QubitRabi(LabberFeature):
         default='Single-Qubit Simulator - Polarization - Z'
     )
 
-    @logged(message='measuring qubit rabi...', end='\n')
+    @logged(message='measuring qubit rabi', end='\n')
     def __call__(self, level=0):
         # TODO: other stuff
         super().__call__()
@@ -208,7 +208,7 @@ class QubitRabi(LabberFeature):
 
     @property
     @refresh
-    def decay_time(self):
+    def phase(self):
         """
         Return the Rabi phase. Note that this can be nonzero, depending on the
         drive pulse shape.
@@ -228,7 +228,7 @@ class QubitRelaxation(LabberFeature):
     input_file = StringField(default='')
     output_file = StringField(default='')
 
-    @logged(message='measuring qubit relaxation...', end='\n')
+    @logged(message='measuring qubit relaxation', end='\n')
     def __call__(self):
         # TODO: other stuff
         super().__call__(self)

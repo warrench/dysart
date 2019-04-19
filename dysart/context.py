@@ -7,4 +7,5 @@ class Context:
     """
     db_client =     None
     labber_client = None
+    logfile =       None
 	# Should also track logger.

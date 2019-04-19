@@ -43,7 +43,9 @@ simple virtual qubit measurements. Run a Labber InstrumentServer serving a
 Single-Qubit Simulator and a Multi-Qubit Pulse Generator, and try running the
 following example:
 
-![qubit measurement example](assets/dys_example.png)
+<p align="center">
+  <img src="assets/dys_example.png" alt="qubit measurement example" />
+</p>
 
 ## (Semi-)stable features
 

@@ -78,13 +78,13 @@ class LabberFeature(Feature):
             return s
 
         last_fit = self.data['fit_results'][-1]
-        max_len = max(map(len, last_fit.keys()))  # longest param name 
+        max_len = max(map(len, last_fit.keys()))  # longest param name
         for param in last_fit:
             s += cstr(param.ljust(max_len, ' '), 'italic') + ' : ' +\
                  strrep_val(last_fit[param]) + '\n'
         return s
 
-        
+
     def __call__(self, **kwargs):
         """
         Thinly wrap the Labber API
@@ -93,12 +93,12 @@ class LabberFeature(Feature):
         # file. This is sort of a stopgap; I'm not really sure it behaves how
         # we want in production.
         for key in kwargs:
-            self.setValue(key, kwargs[key])
+            self.set_value(key, kwargs[key])
 
         # Make RPC to Labber!
         self.config.performMeasurement()
 
-    def setValue(self, label, value):
+    def set_value(self, label, value):
         """
         Simply wrap the Labber API
         """

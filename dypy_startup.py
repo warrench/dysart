@@ -95,7 +95,9 @@ def labber_connect(host_name):
     return None
 
 if __name__ == '__main__':
-    cprint('\nWelcome to DyPy!', status='bold')
+    cprint('Welcome to DyPy!', status='bold')
     Context.db_client = db_connect('localhost', 27017)
     Context.labber_client = labber_connect('localhost')
-    print('')
+    Context.logfile = os.path.join(os.environ['DYS_PATH'], 'debug_data',
+                                   'log', 'dysart.log')
+    messages.configure_logging(logfile=Context.logfile)

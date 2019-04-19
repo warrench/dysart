@@ -4,12 +4,11 @@ recursively-called status lines.
 """
 
 import os
+import logging
+import getpass
+import inspect
 import datetime as dt
 from functools import wraps
-
-default_logfile_path = os.path.join(os.environ['DYS_PATH'], 'debug_data',
-                                    'log', 'dysart.log')
-
 
 class Bcolor:
     """
@@ -75,52 +74,73 @@ def msg2(message, level=0, end="\n"):
     print(output, end=end)
 
 
-def write_log(message, logfile):
+def write_log(message):
     """
     Write a message to a log file with date and time information.
     """
-    # TODO: use python standard library logging API to log message "correctly"
-    separator = ' | '
-    prefix = dt.datetime.now().ctime() + separator
-    with open(logfile, 'a') as f:
-        f.write(prefix + message + '\n')
+    logging.info(message)
 
-
-def logged(logfile=default_logfile_path, stdout=True,
-           message='log event', **kwargs):
+def logged(stdout=True, message='log event', **kwargs):
     """
     Decorator for handling log messages. By default, writes to a default log
     file in the debug_data database directory, and prints output to stdout.
     Passes level parameter in decorated function to message functions to
     """
-    if logfile is None or logfile is '':
-        # Set the log output to the null file. This should actually be cross-
-        # platform, i.e. equal to '/dev/null' on unix systems and 'NULL' on
-        # windows.
-        logfile = os.devnull
-
-    # set string terminator for log message
+    # set terminator for log message
     term = "\n"
     if 'end' in kwargs:
         term = kwargs['end']
 
     def decorator(fn):
         @wraps(fn)
-        def wrapped(*args, **kwargs_inner):
-            # write stdout message
+        def wrapped(*args_inner, **kwargs_inner):
             if stdout:
                 if 'level' in kwargs_inner:
                     lvl = kwargs_inner['level']
                 else:
                     lvl = 0
                 msg1(message, level=lvl, end=term)
+
+            # Check if this was called as a method of an object and, if so,
+            # intercept the message to reflect this.
+            # TODO: this could done much better with a log-entry object that
+            # receives attributes like 'caller', etc., and is then formatted
+            # independently.
+            msg_prefix = ''
+            spec = inspect.getargspec(fn)
+            if spec.args and spec.args[0] == 'self':
+                # TODO: note that this isn't really airtight. It is not a rule
+                # of the syntax that argument 0 must be called 'self' for a 
+                # class method.
+                caller = args_inner[0]
+                msg_prefix = caller.name + ' | '
+
             # write log message
-            write_log(message, logfile)
-            # Call the original function
-            return_value = fn(*args, **kwargs_inner)
-            # Post-call operations
+            write_log(msg_prefix + message)
+            # call the original function
+            return_value = fn(*args_inner, **kwargs_inner)
+            # post-call operations
             # ...
-            # Finally, return whatever fn would have returned!
+            # finally, return whatever fn would have returned!
             return return_value
         return wrapped
     return decorator
+
+def configure_logging(logfile=''):
+    """
+    Set up the logging module to write to the correct logfile, etc.
+    """
+
+    if logfile is None or logfile is '':
+        # Set the log output to the null file. This should actually be cross-
+        # platform, i.e. equal to '/dev/null' on unix systems and 'NULL' on
+        # windows.
+        logfile = os.devnull
+
+    # TODO: I should really take advantage of some of the more advanced
+    # features of the logging module. 
+    user = getpass.getuser()
+    log_format = '%(asctime)s | ' + user + " | %(message)s"
+    date_format = '%m/%d/%Y %I:%M:%S'
+    logging.basicConfig(format=log_format, filename=logfile,
+                        datefmt=date_format, level='INFO')

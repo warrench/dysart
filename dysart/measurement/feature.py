@@ -186,8 +186,8 @@ class Feature(Document):
         return s
 
     # Does this work? The decorator is interpreted at runtime, so self.name will
-    # be in scope, right?
-    @logged('update method called')
+    # be in scope, right? -> No, not even a little bit. Think, ya dummy.
+    @logged(message='update method called')
     def __call__(self, level=0):
         """
         Feature is callable. This method does whatever is needed to update an
@@ -221,10 +221,14 @@ class Feature(Document):
 
         return False
 
-    def set_expired(self, is_expired):
+    def set_expired(self, *args):
         """
         Provide an interface to manually set the expiration state of a feature.
         """
+        if not args:
+            is_expired = True
+        else:
+            is_expired = args[0]
         self.manual_expiration_switch = is_expired
 
     def update(self):
