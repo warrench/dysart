@@ -44,7 +44,7 @@ Single-Qubit Simulator and a Multi-Qubit Pulse Generator, and try running the
 following example:
 
 <p align="center">
-  <img src="assets/dys_example.png" alt="qubit measurement example" />
+  <img src="assets/dys_example.png" alt="qubit measurement example" style="max-width:50%;"/>
 </p>
 
 ## (Semi-)stable features

@@ -74,7 +74,7 @@ def db_connect(host_name, host_port):
             return mongo_client
         except Exception as e:
             # TODO: replace this with a less general exception.
-            cprint(' failed to connect to database.', status='fail')
+            cprint('failed.', status='fail')
 			
             return None
     else:
@@ -91,7 +91,7 @@ def labber_connect(host_name):
         return labber_client
     except Exception as e:
         # TODO: replace this with a less general exception.
-        cprint(' failed to connect to intrument server.', status='fail')
+        cprint('failed.', status='fail')
     return None
 
 if __name__ == '__main__':

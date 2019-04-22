@@ -57,7 +57,7 @@ class QubitSpectrum(LabberFeature):
     The other incredibly ugly thing is the duplication of the log file: it's
     written once to the output file location, and once to the mongodb database.
     """
-
+    call_message = 'measuring qubit spectrum'
     input_file_path = StringField(default=meas.qubit_spec_file)
     output_file_path = StringField(default=meas.qubit_spec_file_out)
 
@@ -77,10 +77,9 @@ class QubitSpectrum(LabberFeature):
         default='Single-Qubit Simulator - Polarization - Z'
     )
 
-    @logged(message='measuring qubit spectrum', end='\n')
-    def __call__(self, level=0):
+    def __call__(self, initiating_call=None):
         # TODO: other stuff
-        super().__call__()
+        super().__call__(initiating_call=initiating_call)
 
         # Raw data is now in output_file. Load it into self.data.
         log_file = Labber.LogFile(self.output_file_path)
@@ -121,6 +120,7 @@ class QubitRabi(LabberFeature):
     Feature object for a Rabi measurement on a qubit.
     """
 
+    call_message = 'measuring qubit rabi'
     input_file_path = StringField(default=meas.qubit_rabi_file)
     output_file_path = StringField(default=meas.qubit_rabi_file_out)
 
@@ -140,10 +140,9 @@ class QubitRabi(LabberFeature):
         default='Single-Qubit Simulator - Polarization - Z'
     )
 
-    @logged(message='measuring qubit rabi', end='\n')
-    def __call__(self, level=0):
+    def __call__(self, initiating_call=None, **kwargs):
         # TODO: other stuff
-        super().__call__()
+        super().__call__(initiating_call=initiating_call)
 
         center_freq = self.parents['spec'].center_freq
         freq_channel = self.parents['spec'].drive_frequency_channel
@@ -229,7 +228,7 @@ class QubitRelaxation(LabberFeature):
     output_file = StringField(default='')
 
     @logged(message='measuring qubit relaxation', end='\n')
-    def __call__(self):
+    def __call__(self, **kwargs):
         # TODO: other stuff
         super().__call__(self)
         # TODO: other stuff

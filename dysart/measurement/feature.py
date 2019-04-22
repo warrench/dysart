@@ -11,13 +11,15 @@ Later on, some other scientist might like to take a far-downstream measurement
 without having to think about _anything_ more than the highest leayer of
 """
 
-#import Labber
 from mongoengine import *
 import datetime as dt
 import time
 from .messages import *
 # Decorator definitions
 from functools import wraps
+# call record imports
+import getpass
+import hashlib
 
 
 def refresh(fn):
@@ -55,31 +57,36 @@ def refresh(fn):
         """
         The modified function passed to refresh.
         """
-        self = args[0]
-        # Sanitize the input in case a level wasn't passed.
-        if 'level' in kwargs:
-            lvl = kwargs['level']
+        feature = args[0]
+
+        # Generate new call record from initiating call record
+        # Ensure that initiating_call is defined
+        if 'initiating_call' in kwargs:
+            initiating_call = kwargs['initiating_call']
         else:
-            lvl = 0
+            initiating_call = None
+        # And create the new call record.
+        this_call = CallRecord(feature, initiating_call=initiating_call)
+
         # is_stale tracks whether we need to update this node
         is_stale = False
         # if this call recurses, recurse on ancestors.
-        if self.is_recursive():
-            for parent_key in self.parents:
+        if feature.is_recursive():
+            for parent_key in feature.parents:
                 # Call parent to refresh recursively; increment stack depth
-                parent_is_stale = self.parents[parent_key]\
-                                        .touch(level=lvl + 1, is_stale=0)
+                parent_is_stale = feature.parents[parent_key]\
+                                   .touch(initiating_call=this_call, is_stale=0)
                 is_stale |= parent_is_stale
         # If stale for some other reason, also flag to be updated.
-        self_expired = self.__expired__(level=lvl)
-        is_stale |= self_expired
-        is_stale |= self.manual_expiration_switch
+        feature_expired = feature.__expired__(call_record=this_call)
+        is_stale |= feature_expired
+        is_stale |= feature.manual_expiration_switch
         # If this line is in a later place, __call__ is called twice. You need
         # to understand why.
-        self.manual_expiration_switch = False
+        feature.manual_expiration_switch = False
         # Call the update-self method, the reason for this wrapper's existence
         if is_stale:
-            self(level=lvl)
+            feature(initiating_call=initiating_call)
         # Update staleness parameter in case it was passed in with the function
         # TODO: this currently only exists for the benefit of Feature.touch().
         # If that method is removed, consider getting rid of this snippet, too.
@@ -88,8 +95,8 @@ def refresh(fn):
         # Call the requested function!
         return_value = fn(*args, **kwargs)
         # Save any changes to the database
-        # self.manual_expiration_switch = False
-        self.save()
+        # feature.manual_expiration_switch = False
+        feature.save()
         # Finally, pass along return value of fn: this wrapper should be purely
         # impure
         return return_value
@@ -128,6 +135,7 @@ class Feature(Document):
     as an instance of this class.
     """
 
+    call_message = 'updating feature'
     meta = {'allow_inheritance': True}
 
     # Feature payload. One of the drawbacks of using mongoengine is that the
@@ -185,10 +193,26 @@ class Feature(Document):
 
         return s
 
-    # Does this work? The decorator is interpreted at runtime, so self.name will
-    # be in scope, right? -> No, not even a little bit. Think, ya dummy.
-    @logged(message='update method called')
-    def __call__(self, level=0):
+    def get_properties(self):
+        """
+        TODO real get_properties docstring
+        Return a list of all the property methods of the feature
+        """
+        class_dict = self.__class__.__dict__
+        return [p for p in class_dict if isinstance(class_dict[p], property)\
+                and p != 'properties']
+    
+    @property
+    def properties(self):
+        """
+        TODO real properties docstring
+        Pretty-print a human-readable description of all the object's property methods
+        """
+        print('')
+        for property in self.get_properties():
+            pprint_func(property, self.__class__.__dict__[property].__doc__)
+
+    def __call__(self, initiating_call=None, **kwargs):
         """
         Feature is callable. This method does whatever is needed to update an
         expired feature.
@@ -202,7 +226,7 @@ class Feature(Document):
         return
 
     @refresh
-    def touch(self, level=0, is_stale=False):
+    def touch(self, initiating_call=None, is_stale=False):
         """
         Manually refresh the feature without doing anything else. This method
         has a special role, being invoked by DySART as the default refresh
@@ -214,7 +238,7 @@ class Feature(Document):
         """
         return is_stale
 
-    def __expired__(self, level=0):
+    def __expired__(self, call_record=None):
         """
         Check for feature expiration. By default, everything is a twinkie.
         """
@@ -261,3 +285,54 @@ class Feature(Document):
             else:
                 self.add_parents(*parent)
         self.save()
+
+
+class CallRecord(Document):
+    """
+    TODO CallRecord docstring
+
+    Uniquely identified (with high probability) by a 40-character hexadecimal
+    string.
+    """
+
+    uid_len = 40
+
+    # Exit codes
+    DONE = 'done'
+    FAILED = 'failed'
+    WARNING = 'warning'
+
+    initiating_call = ReferenceField('self', required=False)
+    level = IntField(default=0)
+    feature = ReferenceField('Feature')
+    uid = StringField(default='', max_length=uid_len, required=True, primary_key=True)
+    timestamp = DateTimeField(default=dt.datetime.now())
+    user = StringField(max_length=255)
+    exit_status = StringField(max_length=40)
+
+    def __init__(self, feature, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # self.initiating_call = initiating_call
+        self.feature = feature
+        self.timestamp = dt.datetime.now()
+        if self.initiating_call == None:
+            self.level = 0
+        else:
+            self.level = self.initiating_call.level + 1
+        
+        # Generate a uid
+        # TODO really this should be a hash of the called feature's state
+        h = hashlib.sha1(str.encode(self.feature.name))
+        if self.initiating_call == None:
+            h.update(str.encode(str(self.timestamp)))
+        else:
+            h.update(str.encode(self.initiating_call.uid))
+        self.uid = h.hexdigest()[:CallRecord.uid_len]
+        
+        self.user =  getpass.getuser()
+
+        self.save()
+
+    def get_initiated_call(self, other_feature):
+        # Should search tree for a matching call.
+        retur

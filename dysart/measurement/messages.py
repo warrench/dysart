@@ -8,6 +8,7 @@ import logging
 import getpass
 import inspect
 import datetime as dt
+import textwrap
 from functools import wraps
 
 class Bcolor:
@@ -24,6 +25,20 @@ class Bcolor:
     ITALIC = '\033[3m'
     UNDERLINE = '\033[4m'
 
+def pprint_func(name, doc):
+    """
+    TODO real docstring for pprint_property
+    Takes a name docstring of a function, an, and formats and pretty-prints them.
+    """
+    # Number of columns in the formatted docscring
+    status_col = int(os.environ['STATUS_COL'])
+    # Prepare the docstring: fix up whitespace for display
+    doc = ' '.join(doc.strip().split())
+    # Prepare the docstring: wrap it and indent it
+    doc = '\t' + '\n\t'.join(textwrap.wrap(doc, status_col))
+    # Finally, print the result
+    print(cstr(name, status='bold') + '\n' + cstr(doc, status='italic') + '\n')
+    
 
 def cstr(s, status='normal'):
     """

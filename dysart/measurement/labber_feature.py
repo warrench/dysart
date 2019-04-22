@@ -85,7 +85,7 @@ class LabberFeature(Feature):
         return s
 
 
-    def __call__(self, **kwargs):
+    def __call__(self, initiating_call=None, **kwargs):
         """
         Thinly wrap the Labber API
         """
@@ -113,7 +113,7 @@ class LabberFeature(Feature):
     def output_file(self):
         return self.config.sCfgFileIn
 
-    def __expired__(self, level=0):
+    def __expired__(self, call_record=None):
         """
         Default expiration condition: is there  a result?
         """
