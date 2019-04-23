@@ -112,7 +112,7 @@ class QubitSpectrum(LabberFeature):
         """
         last_fit = self.data['fit_results'][-1]
         fwhm = last_fit['_0_fwhm']
-        return fwhm
+        return fwhm/2
 
 
 class QubitRabi(LabberFeature):
@@ -176,7 +176,6 @@ class QubitRabi(LabberFeature):
         """
         rabi_period = 1/self.frequency
         return rabi_period/2
-
 
     @property
     @refresh
