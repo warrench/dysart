@@ -97,10 +97,11 @@ def labber_connect(host_name):
 
 def feature_tree_setup():
     """
-    Set up a default feature tree, perhaps set up by config script
+    Set up a default feature tree, e.g. specified by a config script
     """
-    tree_path = os.environ['DEFAULT_TREE']
-    if not tree_path:
+    try:
+        tree_path = os.environ['DEFAULT_TREE']
+    except KeyError:
         return
     try:
         tree_module_path = os.path.join(tree_path)
@@ -115,7 +116,8 @@ def feature_tree_setup():
         # And put them in the global namespace
         globals().update({name: getattr(tree, name) for name in feature_names})
 
-    except Exception:
+    except Exception as e:
+        print(str(e))
         print("could not import feature tree.")
 
 

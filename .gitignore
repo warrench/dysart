@@ -15,6 +15,7 @@
 settings.json
 
 # Personal todo files
+*.org
 todo*
 TODO*
 

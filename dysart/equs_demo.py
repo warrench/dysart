@@ -24,4 +24,4 @@ qb_rabi.parents['spec'] = qb_spec
 #qb_relax.parents['spec'] = qb_rabi
 
 cprint('done.', status='ok', end='\n')
-print('\n' + qb_rabi.__str__() + '\n')
+print('\n' + qb_rabi.__str__())

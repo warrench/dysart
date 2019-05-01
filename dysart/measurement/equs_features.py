@@ -58,7 +58,7 @@ class QubitSpectrum(LabberFeature):
     written once to the output file location, and once to the mongodb database.
     """
     call_message = 'measuring qubit spectrum'
-    input_file_path = StringField(default=meas.qubit_spec_file)
+    template_file_path = StringField(default=meas.qubit_spec_file)
     output_file_path = StringField(default=meas.qubit_spec_file_out)
 
     # Instrument names: hardcoded for now.
@@ -121,7 +121,7 @@ class QubitRabi(LabberFeature):
     """
 
     call_message = 'measuring qubit rabi'
-    input_file_path = StringField(default=meas.qubit_rabi_file)
+    template_file_path = StringField(default=meas.qubit_rabi_file)
     output_file_path = StringField(default=meas.qubit_rabi_file_out)
 
     # Instrument names: hardcoded for now.

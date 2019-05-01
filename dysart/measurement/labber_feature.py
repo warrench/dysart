@@ -7,7 +7,17 @@ etc.
 """
 
 import os
+import numpy as np
+"""
+import json
+from parsing.h5_handling import import_h5
+from parsing.json_encoder import dump_to_json_numpy_text
+from parsing.json_encoder import load_from_json_numpy_text
+"""
+from parsing.labber_serialize import load_labber_scenario_as_dict
+from parsing.labber_serialize import save_labber_scenario_from_dict
 import platform
+import tempfile
 import Labber
 from mongoengine import *
 from Labber import ScriptTools as st
@@ -53,17 +63,30 @@ class LabberFeature(Feature):
     """
 
     data = DictField(default={'log': [], 'fit_results': []})
-    input_file_path = ''
+    # Deserialized template file
+    template = DictField(default={})
+    template_diffs = DictField(default={})
+    template_file_path = ''
     output_file_path = ''
 
     def __init__(self, labber_client=default_client, **kwargs):
         if default_client:
             self.labber_client = default_client
+
         super().__init__(**kwargs)
+        # Check to see if the template file has been saved in the DySART database;
+        # if not, deserialize the .hdf5 on disk.
+        if not self.template:
+            self.deserialize_template()
+
+        # Set nondefault parameters
+        #for kwarg in kwargs:
+        #    self.set_value(kwarg, kwargs[kwarg])
 
         # Deprecated by Simon's changes to Labber API?
-        self.config = st.MeasurementObject(self.input_file_path,
+        self.config = st.MeasurementObject(self.template_file_path,
                                            self.output_file_path)
+
 
     def __status__(self):
         """
@@ -84,7 +107,6 @@ class LabberFeature(Feature):
                  strrep_val(last_fit[param]) + '\n'
         return s
 
-
     def __call__(self, initiating_call=None, **kwargs):
         """
         Thinly wrap the Labber API
@@ -96,14 +118,104 @@ class LabberFeature(Feature):
             self.set_value(key, kwargs[key])
 
         # Make RPC to Labber!
+        # set the input file.
+        self.config.sCfgFileIn = self.emit_labber_input_file()
         self.config.performMeasurement()
+
+    def deserialize_template(self):
+        """
+        Unmarshall the template file.
+        """
+        
+        """
+        # Check if it's an .hdf5 or .json: for now, do this naively
+        # by looking at the file extension.
+        if self.template_file_path.endswith('.hdf5'):
+            self.template = import_h5(self.template_file_path)
+        elif self.template_file_path.endswith('.json'):
+            with open('self.template_file_path', 'r') as f:
+                self.template = json.loads(f.read())
+        """
+        self.template = load_labber_scenario_as_dict(self.template_file_path,
+                            decode_complex=False)
 
     def set_value(self, label, value):
         """
         Simply wrap the Labber API
         """
-        self.config.updateValue(label, value)
+
+        # Explicit type-checking (and behavior dependent on the result) seems really
+        # not in the spirit of duck-typing.
+        # I'm actually really not super happy with this, but it's what people asked for.
+        # TODO Maybe I should argue against it.
+        if isinstance(value, list):
+            canonicalized_value = value
+        elif isinstance(value, np.ndarray):
+            canonicalized_value = list(value)
+        elif isinstance(value, tuple):
+            canonicalized_value = list(np.linspace(*value))
+        #else isinstance(value, (int, float, complex)):
+        #    canonicalized_value = value
+        #    self.config.updateValue(label, canonizalized_value)
+
+        self.template_diffs[label] = canonicalized_value
         self.set_expired(True)
+    
+    def merge_configs(self):
+        """
+        TODO write a real docstring here
+        Merge the template and diff configuration dictionaries, in preparation
+        for serialization
+        """
+        # TODO actually do it. For now, just return the tamplate.
+        return self.template
+
+    def emit_labber_input_file(self):
+        """
+        TODO write a real docstring here
+        Write a temporary .hdf5 input for Labber to consume by attempting to
+        combine the template and template_diffs. Under Unix this gets written
+        to a tempfile in the enclosing /proc subtree. Windows should use a
+        spooled file, which I think "really exists" on that platform.
+
+        Returns a path to the resulting tempfile. 
+
+        TODO UPDATE: the /proc tree doesn't exist on MacOS. Must use a
+        different interface on that platform.
+        """
+        if 'temp' in dir(self) and not self.temp.closed:
+            self.temp.close()
+
+        if platform.system() == 'Linux':
+            pid = os.getpid()
+            temp = tempfile.NamedTemporaryFile(
+                mode='w+b', dir='/tmp', suffix='.labber')
+            fd = temp.fileno()
+            fp = temp.name
+            # Merge the template and diffs; write to the tempfile
+            save_labber_scenario_from_dict(fp, self.merge_configs())
+            #temp.write(dump_to_json_numpy_text(self.merge_configs()))
+            # fp = os.path.join(os.sep, 'proc', str(pid), 'fd', str(fd))
+        elif platform.system() == 'Darwin':
+            raise Exception('Unsupported operationn on this platform')
+        elif platform.system() == 'Windows':
+            raise Exception('Unsupported operationn on this platform')
+        
+        # Hold onto this temp file so it doesn't get closed by garbage
+        # collection. (Is this the best way to do this?)
+        self.temp = temp
+        return fp
+
+
+    @property
+    def diffs(self):
+        """
+        TODO write a real docstring here
+        TODO write a real method here
+        Pretty-print all the user-specified configuration parameters that
+        differ from the template file
+        """
+        print(self.template_diffs)
 
     @property
     def input_file(self):

@@ -87,7 +87,8 @@ def encode_msgpack(obj):
 
 
 def decode_msgpack(dct):
-    """Decodes a previously encoded numpy ndarray with proper shape and dtype.
+    """
+    Decodes a previously encoded numpy ndarray with proper shape and dtype.
 
     :param dct: (dict) msgpack encoded ndarray
     :return: (ndarray) if input was an encoded ndarray
@@ -98,6 +99,21 @@ def decode_msgpack(dct):
             return np.frombuffer(data, dct['dtype']).reshape(dct['shape'])
         elif '__complex__' in dct:
             return complex(*dct['__complex__'])
+    return dct
+
+
+def decode_msgpack_no_complex(dct):
+    """
+    Decodes a previously encoded numpy ndarray with proper shape and dtype.
+    Ignores encoded complex values and does not decode them.
+
+    :param dct: (dict) msgpack encoded ndarray
+    :return: (ndarray) if input was an encoded ndarray
+    """
+    if isinstance(dct, dict):
+        if '__ndarray__' in dct:
+            data = dct['__ndarray__']
+            return np.frombuffer(data, dct['dtype']).reshape(dct['shape'])
     return dct
 
 
@@ -121,7 +137,7 @@ def save_labber_scenario_from_dict(file_name, config):
     return file_name_out
 
 
-def load_labber_scenario_as_dict(file_name):
+def load_labber_scenario_as_dict(file_name, decode_complex=True):
     """Load Labber scenario as dict from binary .labber or .json file"""
     # check file type
     (base_name, ext) = os.path.splitext(file_name)
@@ -136,7 +152,7 @@ def load_labber_scenario_as_dict(file_name):
         file_name_labber = base_name + '.labber'
         with open(file_name_labber, 'rb') as f:
             data = f.read()
+        hook = decode_msgpack if decode_complex else decode_msgpack_no_complex
         config = msgpack.unpackb(
-            data, object_hook=decode_msgpack, encoding='utf-8',
-            use_list=True)
+            data, object_hook=hook, encoding='utf-8', use_list=True)
     return config

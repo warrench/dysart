@@ -164,6 +164,7 @@ class Feature(Document):
         """
         return ''
         
+
     def __str__(self):
         """
         human-readable string representation of Feature class. This should be
@@ -335,4 +336,4 @@ class CallRecord(Document):
 
     def get_initiated_call(self, other_feature):
         # Should search tree for a matching call.
-        retur
+        return
