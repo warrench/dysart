@@ -19,6 +19,7 @@ from parsing.labber_serialize import save_labber_scenario_from_dict
 import platform
 import tempfile
 import Labber
+import copy
 from mongoengine import *
 from Labber import ScriptTools as st
 from .feature import Feature
@@ -122,6 +123,11 @@ class LabberFeature(Feature):
         self.config.sCfgFileIn = self.emit_labber_input_file()
         self.config.performMeasurement()
 
+        # Raw data is now in output_file. Load it into self.data.
+        log_file = Labber.LogFile(self.output_file_path)
+        num_entries = log_file.getNumberOfEntries()
+        self.data['log'].append(log_file.getEntry(num_entries - 1))
+
     def deserialize_template(self):
         """
         Unmarshall the template file.
@@ -154,12 +160,14 @@ class LabberFeature(Feature):
             canonicalized_value = list(value)
         elif isinstance(value, tuple):
             canonicalized_value = list(np.linspace(*value))
-        #else isinstance(value, (int, float, complex)):
-        #    canonicalized_value = value
+        elif isinstance(value, (int, float, complex)):
+            canonicalized_value = value
         #    self.config.updateValue(label, canonizalized_value)
+        else:
+            Exception("I don't know what to do with this value")
 
         self.template_diffs[label] = canonicalized_value
-        self.set_expired(True)
+        #self.set_expired(True)
     
     def merge_configs(self):
         """
@@ -167,8 +175,22 @@ class LabberFeature(Feature):
         Merge the template and diff configuration dictionaries, in preparation
         for serialization
         """
-        # TODO actually do it. For now, just return the tamplate.
-        return self.template
+        # TODO actually do it. For now, just return the most naive thing possible.
+        new_config = copy.deepcopy(self.template)
+        for diff_key in self.template_diffs:
+            vals = self.template_diffs[diff_key]
+            channel = [c for c in new_config['step_channels'] if 
+                        c['channel_name'] == diff_key]
+            channel = [{}] if not channel else channel[0]
+            if isinstance(vals, tuple):
+                items = channel['step_items'][0]
+                items['start'] = vals[0]
+                items['stop'] = vals[1]
+                items['n_pts'] = vals[2]
+                items['center'] = (vals[0] + vals[1])/2
+                items['span'] = vals[1] - vals[0]
+                items['step'] = items['span']/items['n_pts']
+        return new_config
 
     def emit_labber_input_file(self):
         """

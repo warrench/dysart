@@ -34,24 +34,26 @@ class NumpyTextJSONEncoder(json.JSONEncoder):
         return json.JSONEncoder(self, obj)
 
 
-def json_numpy_text_hook(dct):
-    """Decodes a previously encoded numpy ndarray with proper shape and dtype.
+def json_numpy_text_hook(decode_complex):
+    def hook(dct):
+        """Decodes a previously encoded numpy ndarray with proper shape and dtype.
 
-    :param dct: (dict) json encoded ndarray as text
-    :return: (ndarray) if input was an encoded ndarray
-    """
-    if isinstance(dct, dict):
-        if '__ndarray__' in dct:
-            dtype = dct.get('dtype', 'float')
-            if 'shape' in dct:
-                return np.array(
-                    dct['__ndarray__'], dtype).reshape(dct['shape'])
-            else:
-                return np.array(dct['__ndarray__'], dtype)
+        :param dct: (dict) json encoded ndarray as text
+        :return: (ndarray) if input was an encoded ndarray
+        """
+        if isinstance(dct, dict):
+            if '__ndarray__' in dct:
+                dtype = dct.get('dtype', 'float')
+                if 'shape' in dct:
+                    return np.array(
+                        dct['__ndarray__'], dtype).reshape(dct['shape'])
+                else:
+                    return np.array(dct['__ndarray__'], dtype)
 
-        elif '__complex__' in dct:
-            return complex(*dct['__complex__'])
-    return dct
+            elif '__complex__' in dct and decode_complex:
+                return complex(*dct['__complex__'])
+        return dct
+    return hook
 
 
 def dump_to_json_numpy_text(obj):
@@ -59,9 +61,10 @@ def dump_to_json_numpy_text(obj):
     return json.dumps(obj, cls=NumpyTextJSONEncoder).encode('utf-8')
 
 
-def load_from_json_numpy_text(data):
+def load_from_json_numpy_text(data, decode_complex=True):
     """Decode data from input containing json file encoded as text"""
-    return json.loads(data.decode('utf-8'), object_hook=json_numpy_text_hook)
+    return json.loads(data.decode('utf-8'), 
+                      object_hook=json_numpy_text_hook(decode_complex))
 
 
 def encode_msgpack(obj):
@@ -86,35 +89,22 @@ def encode_msgpack(obj):
     return obj
 
 
-def decode_msgpack(dct):
+def decode_msgpack(decode_complex):
     """
     Decodes a previously encoded numpy ndarray with proper shape and dtype.
 
     :param dct: (dict) msgpack encoded ndarray
     :return: (ndarray) if input was an encoded ndarray
     """
-    if isinstance(dct, dict):
-        if '__ndarray__' in dct:
-            data = dct['__ndarray__']
-            return np.frombuffer(data, dct['dtype']).reshape(dct['shape'])
-        elif '__complex__' in dct:
-            return complex(*dct['__complex__'])
-    return dct
-
-
-def decode_msgpack_no_complex(dct):
-    """
-    Decodes a previously encoded numpy ndarray with proper shape and dtype.
-    Ignores encoded complex values and does not decode them.
-
-    :param dct: (dict) msgpack encoded ndarray
-    :return: (ndarray) if input was an encoded ndarray
-    """
-    if isinstance(dct, dict):
-        if '__ndarray__' in dct:
-            data = dct['__ndarray__']
-            return np.frombuffer(data, dct['dtype']).reshape(dct['shape'])
-    return dct
+    def hook(dct):
+        if isinstance(dct, dict):
+            if '__ndarray__' in dct:
+                data = dct['__ndarray__']
+                return np.frombuffer(data, dct['dtype']).reshape(dct['shape'])
+            elif '__complex__' in dct and decode_complex:
+                return complex(*dct['__complex__'])
+        return dct
+    return hook
 
 
 def save_labber_scenario_from_dict(file_name, config):
@@ -145,14 +135,14 @@ def load_labber_scenario_as_dict(file_name, decode_complex=True):
         # load from json text file
         with open(file_name, 'rb') as f:
             data = f.read()
-        config = load_from_json_numpy_text(data)
+        config = load_from_json_numpy_text(data, decode_complex=decode_complex)
 
     else:
         # if not json, only read from .labber files
         file_name_labber = base_name + '.labber'
         with open(file_name_labber, 'rb') as f:
             data = f.read()
-        hook = decode_msgpack if decode_complex else decode_msgpack_no_complex
+        hook = decode_msgpack(decode_complex)  # check if decode complex!
         config = msgpack.unpackb(
             data, object_hook=hook, encoding='utf-8', use_list=True)
     return config

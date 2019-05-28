@@ -210,8 +210,8 @@ class Feature(Document):
         Pretty-print a human-readable description of all the object's property methods
         """
         print('')
-        for property in self.get_properties():
-            pprint_func(property, self.__class__.__dict__[property].__doc__)
+        for prop in self.get_properties():
+            pprint_func(prop, self.__class__.__dict__[prop].__doc__)
 
     def __call__(self, initiating_call=None, **kwargs):
         """

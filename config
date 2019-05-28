@@ -564,7 +564,7 @@ function link_labber {
 		# Link the labber installation
 		ln -s $1/Script/Labber $FULL_LINK_PATH
 	elif [[ $ENV_MANAGER = $VIRTUALENV ]] ; then
-		FULL_LINK_PATH=$DYS_PATH/$PYENV_NAME/lib/python$PYTHON_VERSION/Labber
+		FULL_LINK_PATH=$DYS_PATH/$PYENV_NAME/lib/python$PYTHON_VERSION/site-packages/Labber
 		if [[ ! -z `readlink $FULL_LINK_PATH` ]] ; then
 			unlink $FULL_LINK_PATH
 		fi
@@ -627,36 +627,36 @@ function set_project_tree {
 # Parse input to enter python environment and start db server
 if [[ $# -ne 0 ]]; then
 	case $1 in
-		on)		start	;;
-		start)	start	;;
-		run)	start	;;
-		go)		start	;;
-		begin)	start	;;
-		stop)	stop	;;
-		end)	stop	;;
-		quit)	stop	;;
-		exit)	stop	;;
-		finish)	stop	;;
-		off) 	stop	;;
+		on)					start										;;
+		start)			start										;;
+		run)				start										;;
+		go)					start										;;
+		begin)			start										;;
+		stop)				stop										;;
+		end)				stop										;;
+		quit)				stop										;;
+		exit)				stop										;;
+		finish)			stop										;;
+		off) 				stop										;;
 
-		restart) restart				;;
-		reboot) restart					;;
-		cycle)  restart					;;
+		restart) 		restart									;;
+		reboot) 		restart									;;
+		cycle)			restart									;;
 
-		help)	echo_help					;;
-		status)	echo_status					;;
-    log)	  	read_log              ;;
+		help)				echo_help								;;
+		status)			echo_status						 	;;
+    log)		  	read_log 								;;
 
-		proj)			set_project_tree $2	;;
+		proj)				set_project_tree $2			;;
 
-		install)	install					;;
-		uninstall)	uninstall				;;
-		clean)		clean $2				;;
-		update)		install_requirements	;;
-		upgrade)	install_requirements	;;
+		install)		install									;;
+		uninstall)	uninstall								;;
+		clean)			clean $2								;;
+		update)			install_requirements		;;
+		upgrade)		install_requirements		;;
 
-		labber) 	link_labber $2			;;
-		Labber)		link_labber $2			;;
+		labber)			link_labber $2					;;
+		Labber)			link_labber $2					;;
 
 		*) echo "I don't understand that."	;;
 	esac

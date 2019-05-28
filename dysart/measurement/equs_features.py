@@ -14,22 +14,6 @@ import pint  # Units package
 ureg = pint.UnitRegistry()
 
 
-# Question for Simon: this interface actually doesn't seem to work.
-# On being passed a .json file, load_scenario_as_dict raises
-# No such file or directory: 'path/to/file.labber'.
-"""
-json/binary <-> dict syntax
--------------------------------------------------------------
-
-import Labber
-
-d = Labber.ScriptTools.load_scenario_as_dict('testfile.json')
-print(d)
-Labber.ScriptTools.save_scenario_as_binary(d, 'test_out')
-Labber.ScriptTools.save_scenario_as_json(d, 'test_out_json')
-"""
-
-
 def no_recorded_result(self, level=0):
     """
     Expiration condition: is there a result?
@@ -78,13 +62,9 @@ class QubitSpectrum(LabberFeature):
     )
 
     def __call__(self, initiating_call=None):
-        # TODO: other stuff
+        # Make the Labber measurement. Afterward, data is in self.data['log']
         super().__call__(initiating_call=initiating_call)
 
-        # Raw data is now in output_file. Load it into self.data.
-        log_file = Labber.LogFile(self.output_file_path)
-        num_entries = log_file.getNumberOfEntries()
-        self.data['log'].append(log_file.getEntry(num_entries - 1))
         # Fit that data and save the result in fit_results.
         last_entry = self.data['log'][-1]
         drive_frequency_data = last_entry[self.drive_frequency_channel]
@@ -141,17 +121,14 @@ class QubitRabi(LabberFeature):
     )
 
     def __call__(self, initiating_call=None, **kwargs):
-        # TODO: other stuff
-        super().__call__(initiating_call=initiating_call)
-
+        # Obtain parameters from parents
         center_freq = self.parents['spec'].center_freq
         freq_channel = self.parents['spec'].drive_frequency_channel
-        self.config.updateValue(freq_channel, center_freq)
 
-        # Raw data is now in output_file. Load it into self.data.
-        log_file = Labber.LogFile(self.output_file_path)
-        num_entries = log_file.getNumberOfEntries()
-        self.data['log'].append(log_file.getEntry(num_entries - 1))
+        # RPC to labber and save data
+        super().__call__(initiating_call=initiating_call,
+                         freq_channel=center_freq)
+
         # Fit that data and save the result in fit_results.
         last_entry = self.data['log'][-1]
         plateau_data = last_entry[self.plateau_channel]
