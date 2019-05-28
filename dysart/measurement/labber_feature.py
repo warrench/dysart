@@ -8,12 +8,6 @@ etc.
 
 import os
 import numpy as np
-"""
-import json
-from parsing.h5_handling import import_h5
-from parsing.json_encoder import dump_to_json_numpy_text
-from parsing.json_encoder import load_from_json_numpy_text
-"""
 from parsing.labber_serialize import load_labber_scenario_as_dict
 from parsing.labber_serialize import save_labber_scenario_from_dict
 import platform

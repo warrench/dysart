@@ -38,8 +38,10 @@ LAB_ON=lab_on
 fg_red="$(tput setaf 1)"
 fg_green="$(tput setaf 2)"
 reset="$(tput sgr0)"
+DONE_STR="${fg_green}done.${reset}"
 ON_STR="${fg_green}ON${reset}"
 OFF_STR="${fg_red}OFF${reset}"
+NONE_STR="${fg_red}NONE${reset}"
 export STATUS_COL=48
 
 #TODO: retrieve this list externally!
@@ -165,12 +167,12 @@ function activate_env {
 	if [[ $ENV_MANAGER = $CONDA ]] ; then
 		printf "%-"$STATUS_COL"s" "activating python environment..."
 		conda activate $1
-    	printf "\033[92mdone.\033[0m\n"
+    	printf "%s\n" $DONE_STR
 	elif [[ $ENV_MANAGER = $VIRTUALENV ]]; then
 		# Just activate the environment.
 		printf "%-"$STATUS_COL"s" "activating python environment..."
 		source $DYS_PATH/$1/bin/activate
-    	printf "\033[92mdone.\033[0m\n"
+    	printf "%s\n" $DONE_STR
 	else
 		echo "There appears to be no python \\
 		environment management tool installed."
@@ -185,10 +187,10 @@ function deactivate_env {
  	printf "%-"$STATUS_COL"s" "deactivating python environment..."
 	if [[ $ENV_MANAGER = $CONDA ]] ; then
 		conda deactivate 
-    	printf "\033[92mdone.\033[0m\n"
+    	printf "%s\n" $DONE_STR
 	elif [[ $ENV_MANAGER = $VIRTUALENV ]] ; then
 		deactivate 
-    	printf "\033[92mdone.\033[0m\n"
+    	printf "%s\n" $DONE_STR
 	else
 		echo "There appears to be no python \\
 		environment management tool installed."
@@ -258,7 +260,7 @@ function start_db {
 		printf "%-"$STATUS_COL"s" "starting database on default port..."
 		mongod --quiet --logpath $DYS_PATH/$LOG_PATH/$DB_LOG_FILE\
 		 --dbpath $DYS_PATH/$DB_PATH &
-    printf "\033[92mdone.\033[0m\n"
+    printf "%s\n" $DONE_STR
 	# If DB_STATUS is a positive integer, it's a process id.
 	# This could be considered bad practice leaking in, since db_get_status
 	# doesn't have a single, well-defined return type.
@@ -367,6 +369,7 @@ function echo_status {
 	db_get_status
 	env_get_status
 	lab_get_status
+	#tree_get_status
 	# Print db server information
 	if [[ $DB_STATUS =~ $integral ]] ; then
 		printf "%-"$STATUS_COL"s%s\n" database $ON_STR
@@ -394,6 +397,13 @@ function echo_status {
 		printf "%-"$STATUS_COL"s%s\n" "dummy lab" $OFF_STR
 	else
 		echo "unknown dummy lab status"
+	fi
+	# Print default tree information
+	if [[ -z $DEFAULT_TREE ]] ; then
+		printf "%-"$STATUS_COL"s%s\n" "default tree" $NONE_STR
+	else
+		TREE_STR="${fg_green}$(basename $DEFAULT_TREE)${reset}"
+		printf "%-"$STATUS_COL"s%s\n" "default tree" $TREE_STR
 	fi
 }
 
