@@ -208,7 +208,7 @@ class LabberFeature(Feature):
         if 'temp' in dir(self) and not self.temp.closed:
             self.temp.close()
 
-        if platform.system() == 'Linux':
+        if platform.system() in ['Linux', 'Darwin']:
             pid = os.getpid()
             temp = tempfile.NamedTemporaryFile(
                 mode='w+b', dir='/tmp', suffix='.labber')
@@ -216,12 +216,8 @@ class LabberFeature(Feature):
             fp = temp.name
             # Merge the template and diffs; write to the tempfile
             save_labber_scenario_from_dict(fp, self.merge_configs())
-            #temp.write(dump_to_json_numpy_text(self.merge_configs()))
-            # fp = os.path.join(os.sep, 'proc', str(pid), 'fd', str(fd))
-        elif platform.system() == 'Darwin':
-            raise Exception('Unsupported operationn on this platform')
         elif platform.system() == 'Windows':
-            raise Exception('Unsupported operationn on this platform')
+            raise Exception('Unsupported operation on this platform')
         
         # Hold onto this temp file so it doesn't get closed by garbage
         # collection. (Is this the best way to do this?)
