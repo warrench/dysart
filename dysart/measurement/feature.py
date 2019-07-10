@@ -100,7 +100,7 @@ def refresh(fn):
         # Finally, pass along return value of fn: this wrapper should be purely
         # impure
         return return_value
-    wrapped_fn.is_property = True
+    wrapped_fn.is_refresh = True
     return wrapped_fn
 
 
@@ -163,7 +163,7 @@ class Feature(Document):
         fitting parameters.
         """
         return ''
-        
+
 
     def __str__(self):
         """
@@ -197,18 +197,19 @@ class Feature(Document):
     def get_properties(self):
         """
         TODO real get_properties docstring
-        Return a list of all the property methods of the feature
+        Return a list of all the refresh methods of the feature
         """
         class_dict = self.__class__.__dict__
-        return [p for p in class_dict if isinstance(class_dict[p], property)\
-                and p != 'properties']
-    
+        return [p for p in class_dict if hasattr(class_dict[p], 'is_refresh')\
+                        and not p.startswith('_')]  # ignore self._collections
+
     @property
     def properties(self):
         """
         TODO real properties docstring
         Pretty-print a human-readable description of all the object's property methods
         """
+        class_dict = self.__class__.__dict__
         print('')
         for prop in self.get_properties():
             pprint_func(prop, self.__class__.__dict__[prop].__doc__)
@@ -320,7 +321,7 @@ class CallRecord(Document):
             self.level = 0
         else:
             self.level = self.initiating_call.level + 1
-        
+
         # Generate a uid
         # TODO really this should be a hash of the called feature's state
         h = hashlib.sha1(str.encode(self.feature.name))
@@ -329,7 +330,7 @@ class CallRecord(Document):
         else:
             h.update(str.encode(self.initiating_call.uid))
         self.uid = h.hexdigest()[:CallRecord.uid_len]
-        
+
         self.user =  getpass.getuser()
 
         self.save()

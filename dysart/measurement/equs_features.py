@@ -57,7 +57,7 @@ class QubitSpectrum(LabberFeature):
     drive_frequency_channel = StringField(
         default='Single-Qubit Simulator - Drive frequency'
     )
-    polarization_Z_channel = StringField( 
+    polarization_Z_channel = StringField(
         default='Single-Qubit Simulator - Polarization - Z'
     )
 
@@ -72,7 +72,6 @@ class QubitSpectrum(LabberFeature):
         fit = spectra.fit_spectrum(drive_frequency_data, polarization_Z_data, 1)
         self.data['fit_results'].append(fit.params.valuesdict())
 
-    @property
     @refresh
     def center_freq(self):
         """
@@ -83,7 +82,6 @@ class QubitSpectrum(LabberFeature):
         center = last_fit['_0_center']
         return center
 
-    @property
     @refresh
     def linewidth(self):
         """
@@ -116,7 +114,7 @@ class QubitRabi(LabberFeature):
     plateau_channel = StringField(
         default='Multi-Qubit Pulse Generator - Plateau'
     )
-    polarization_Z_channel = StringField( 
+    polarization_Z_channel = StringField(
         default='Single-Qubit Simulator - Polarization - Z'
     )
 
@@ -136,7 +134,6 @@ class QubitRabi(LabberFeature):
         fit = rabi.fit_rabi(plateau_data, polarization_Z_data)
         self.data['fit_results'].append(fit.params.valuesdict())
 
-    @property
     @refresh
     def frequency(self):
         """
@@ -145,7 +142,6 @@ class QubitRabi(LabberFeature):
         last_fit = self.data['fit_results'][-1]
         return last_fit['freq']
 
-    @property
     @refresh
     def pi_time(self):
         """
@@ -154,7 +150,6 @@ class QubitRabi(LabberFeature):
         rabi_period = 1/self.frequency
         return rabi_period/2
 
-    @property
     @refresh
     def pi_2_time(self):
         """
@@ -163,7 +158,6 @@ class QubitRabi(LabberFeature):
         rabi_period = 1/self.frequency
         return rabi_period/4
 
-    @property
     @refresh
     def decay_rate(self):
         """
@@ -172,7 +166,6 @@ class QubitRabi(LabberFeature):
         last_fit = self.data['fit_results'][-1]
         return last_fit['decay']
 
-    @property
     @refresh
     def decay_time(self):
         """
@@ -181,7 +174,6 @@ class QubitRabi(LabberFeature):
         """
         return 1/self.decay_rate
 
-    @property
     @refresh
     def phase(self):
         """
@@ -209,7 +201,6 @@ class QubitRelaxation(LabberFeature):
         super().__call__(self)
         # TODO: other stuff
 
-    @property
     @refresh
     def time_const(self):
         """
