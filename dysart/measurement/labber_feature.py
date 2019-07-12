@@ -126,7 +126,7 @@ class LabberFeature(Feature):
         """
         Unmarshall the template file.
         """
-        
+
         """
         # Check if it's an .hdf5 or .json: for now, do this naively
         # by looking at the file extension.
@@ -162,7 +162,7 @@ class LabberFeature(Feature):
 
         self.template_diffs[label] = canonicalized_value
         #self.set_expired(True)
-    
+
     def merge_configs(self):
         """
         TODO write a real docstring here
@@ -173,7 +173,7 @@ class LabberFeature(Feature):
         new_config = copy.deepcopy(self.template)
         for diff_key in self.template_diffs:
             vals = self.template_diffs[diff_key]
-            channel = [c for c in new_config['step_channels'] if 
+            channel = [c for c in new_config['step_channels'] if
                         c['channel_name'] == diff_key]
             channel = [{}] if not channel else channel[0]
             if isinstance(vals, tuple):
@@ -194,7 +194,7 @@ class LabberFeature(Feature):
         to a tempfile in the enclosing /proc subtree. Windows should use a
         spooled file, which I think "really exists" on that platform.
 
-        Returns a path to the resulting tempfile. 
+        Returns a path to the resulting tempfile.
 
         TODO UPDATE: the /proc tree doesn't exist on MacOS. Must use a
         different interface on that platform.
@@ -212,7 +212,7 @@ class LabberFeature(Feature):
             save_labber_scenario_from_dict(fp, self.merge_configs())
         elif platform.system() == 'Windows':
             raise Exception('Unsupported operation on this platform')
-        
+
         # Hold onto this temp file so it doesn't get closed by garbage
         # collection. (Is this the best way to do this?)
         self.temp = temp

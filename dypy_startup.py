@@ -75,7 +75,7 @@ def db_connect(host_name, host_port):
         except Exception as e:
             # TODO: replace this with a less general exception.
             cprint('failed.', status='fail')
-			
+
             return None
     else:
         cprint('database server is off.', status='warn')

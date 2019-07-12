@@ -147,7 +147,7 @@ class QubitRabi(LabberFeature):
         """
         Return the time to perform an X gate at the specified drive amplitude
         """
-        rabi_period = 1/self.frequency
+        rabi_period = 1/self.frequency()
         return rabi_period/2
 
     @refresh
@@ -155,7 +155,7 @@ class QubitRabi(LabberFeature):
         """
         Return the time to perform an H gate at the specified drive amplitude
         """
-        rabi_period = 1/self.frequency
+        rabi_period = 1/self.frequency()
         return rabi_period/4
 
     @refresh
@@ -172,7 +172,7 @@ class QubitRabi(LabberFeature):
         Return the Rabi decay time (or more parameters, depending on choice of
         fitting routine)
         """
-        return 1/self.decay_rate
+        return 1/self.decay_rate()
 
     @refresh
     def phase(self):
