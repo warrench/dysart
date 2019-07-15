@@ -66,7 +66,7 @@ class QubitSpectrum(LabberFeature):
         super().__call__(initiating_call=initiating_call)
 
         # Fit that data and save the result in fit_results.
-        last_entry = self.data['log'][-1]
+        last_entry = self.data['log'][-1]['entries'][-1]
         drive_frequency_data = last_entry[self.drive_frequency_channel]
         polarization_Z_data = last_entry[self.polarization_Z_channel]
         fit = spectra.fit_spectrum(drive_frequency_data, polarization_Z_data, 1)
@@ -120,7 +120,7 @@ class QubitRabi(LabberFeature):
 
     def __call__(self, initiating_call=None, **kwargs):
         # Obtain parameters from parents
-        center_freq = self.parents['spec'].center_freq
+        center_freq = self.parents['spec'].center_freq()
         freq_channel = self.parents['spec'].drive_frequency_channel
 
         # RPC to labber and save data
@@ -128,7 +128,7 @@ class QubitRabi(LabberFeature):
                          freq_channel=center_freq)
 
         # Fit that data and save the result in fit_results.
-        last_entry = self.data['log'][-1]
+        last_entry = self.data['log'][-1]['entries'][-1]
         plateau_data = last_entry[self.plateau_channel]
         polarization_Z_data = last_entry[self.polarization_Z_channel]
         fit = rabi.fit_rabi(plateau_data, polarization_Z_data)

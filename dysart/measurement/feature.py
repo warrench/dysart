@@ -144,6 +144,7 @@ class Feature(Document):
     # Hence "data" as a dict blob.
     name = StringField(default='', required=True, primary_key=True)
     data = DictField(default={})
+    manual_expiration_switch = BooleanField(default=False)
     # Time when last updated
     timestamp = DateTimeField(default=dt.datetime.now())
     is_stale_func = StringField(max_length=60)
@@ -154,7 +155,6 @@ class Feature(Document):
         # Create a new document
         super().__init__(**kwargs)
         self.save()
-        self.manual_expiration_switch = False
 
     def __status__(self):
         """
@@ -256,6 +256,7 @@ class Feature(Document):
         else:
             is_expired = args[0]
         self.manual_expiration_switch = is_expired
+        self.save()
 
     def update(self):
         pass

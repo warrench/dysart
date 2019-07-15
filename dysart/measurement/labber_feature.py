@@ -6,16 +6,20 @@ things up by passing in-memory data buffers to reduce the number of writes,
 etc.
 """
 
+import copy
 import os
-import numpy as np
-from parsing.labber_serialize import load_labber_scenario_as_dict
-from parsing.labber_serialize import save_labber_scenario_from_dict
 import platform
 import tempfile
-import Labber
-import copy
+from typing import Optional  # gotta have those maybe types
+from warnings import warn
+
+import numpy as np
 from mongoengine import *
+import Labber
 from Labber import ScriptTools as st
+
+from parsing.labber_serialize import load_labber_scenario_as_dict
+from parsing.labber_serialize import save_labber_scenario_from_dict
 from .feature import Feature
 from .messages import cstr
 from context import Context
@@ -63,6 +67,7 @@ class LabberFeature(Feature):
     template_diffs = DictField(default={})
     template_file_path = ''
     output_file_path = ''
+    MAX_LOG_INDEX = 1000
 
     def __init__(self, labber_client=default_client, **kwargs):
         if default_client:
@@ -114,13 +119,65 @@ class LabberFeature(Feature):
 
         # Make RPC to Labber!
         # set the input file.
-        self.config.sCfgFileIn = self.emit_labber_input_file()
+        self.labber_input_file = self.emit_labber_input_file()
+        self.labber_output_file = self.next_log_name()
         self.config.performMeasurement()
+        # Clean up: tempfile no longer needed.
+        os.unlink(self.labber_input_file)
 
         # Raw data is now in output_file. Load it into self.data.
-        log_file = Labber.LogFile(self.output_file_path)
-        num_entries = log_file.getNumberOfEntries()
-        self.data['log'].append(log_file.getEntry(num_entries - 1))
+        log_file = Labber.LogFile(self.labber_output_file)
+        self.data['log'].append({})
+        self.data['log'][-1]['log_name'] = self.last_log_name()
+        self.data['log'][-1]['entries'] = []
+        for i in range(log_file.getNumberOfEntries()):
+            self.data['log'][-1]['entries'].append(log_file.getEntry(i))
+
+    def _log_index(self, log_name: str) -> int:
+        """
+        get the index at the end of a Labber logfile name
+        """
+        try:
+            return int(os.path.splitext(log_name)[0].split('_')[-1])
+        except ValueError:  # no logfile with an integral suffix
+            return 0
+
+    def last_log_name(self) -> Optional[str]:
+        """
+        return the name of the last-incremented log file
+        """
+        (output_dir, output_fn) = os.path.split(self.output_file_path)
+
+        log_names = [fn for fn in os.listdir(output_dir)
+                        if fn.startswith(os.path.splitext(output_fn)[0])]
+        if log_names:
+            last_log = max(log_names, key=self._log_index)
+            return last_log
+        else:
+            return None
+
+    def log_name(self, index: Optional[int]=None) -> str:
+        """
+        return a valid log name given a log index.
+        """
+        if index is not None:
+            (base, ext) = self.output_file_path.split('.')
+            return base + '_' + str(index) + '.' + ext
+        return self.log_name(index=0)
+
+    def next_log_name(self) -> str:
+        """
+        get the last log name, increment it, and return a valid log name.
+        If there are no logs, return the name of log 1.
+        """
+        last_log = self.last_log_name()
+        last_index = self._log_index(last_log)
+        if last_index:
+            if last_index >= self.MAX_LOG_INDEX:
+                warn('log index {} exceeds MAX_LOG_INDEX'.format(last_index + 1))
+            return self.log_name(index=last_index + 1)
+        else:
+            return self.log_name(index=1)
 
     def deserialize_template(self):
         """
@@ -201,23 +258,16 @@ class LabberFeature(Feature):
         """
         if 'temp' in dir(self) and not self.temp.closed:
             self.temp.close()
+        temp_dir = '/tmp' if platform.system() in ['Linux', 'Darwin']\
+                          else 'C:\\Windows\\Temp'
+        temp = tempfile.NamedTemporaryFile(delete=False,
+            mode='w+b', dir=temp_dir, suffix='.labber')
+        fp = temp.name
+        temp.close()
 
-        if platform.system() in ['Linux', 'Darwin']:
-            pid = os.getpid()
-            temp = tempfile.NamedTemporaryFile(
-                mode='w+b', dir='/tmp', suffix='.labber')
-            fd = temp.fileno()
-            fp = temp.name
-            # Merge the template and diffs; write to the tempfile
-            save_labber_scenario_from_dict(fp, self.merge_configs())
-        elif platform.system() == 'Windows':
-            raise Exception('Unsupported operation on this platform')
-
-        # Hold onto this temp file so it doesn't get closed by garbage
-        # collection. (Is this the best way to do this?)
-        self.temp = temp
+        # Merge the template and diffs; write to the tempfile
+        save_labber_scenario_from_dict(fp, self.merge_configs())
         return fp
-
 
     @property
     def diffs(self):
@@ -230,12 +280,20 @@ class LabberFeature(Feature):
         print(self.template_diffs)
 
     @property
-    def input_file(self):
+    def labber_input_file(self):
         return self.config.sCfgFileIn
 
+    @labber_input_file.setter
+    def labber_input_file(self, x):
+        self.config.sCfgFileIn = x
+
     @property
-    def output_file(self):
-        return self.config.sCfgFileIn
+    def labber_output_file(self):
+        return self.config.sCfgFileOut
+
+    @labber_output_file.setter
+    def labber_output_file(self, x):
+        self.config.sCfgFileOut = x
 
     def __expired__(self, call_record=None):
         """
