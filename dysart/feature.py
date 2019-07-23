@@ -11,20 +11,20 @@ Later on, some other scientist might like to take a far-downstream measurement
 without having to think about _anything_ more than the highest leayer of
 """
 
-from mongoengine import *
 import datetime as dt
-import time
-from .messages import *
-# Decorator definitions
+from enum import Enum
 from functools import wraps
-# call record imports
-import getpass
 import hashlib
+import getpass
+import time
 
+from mongoengine import *
+
+import dysart.messages.messages as messages
 
 def refresh(fn):
     """
-    Decorator that flags a method as having dependencies and possible requiring
+    Decorator that flags a method as having dependencies and possibly requiring
     a refresh operation. Recursively refreshes ancestors, then checks an
     additional condition `__expired__()` specified by the Feature class. If the
     feature or its ancestors have expired, perform the corrective operation
@@ -143,13 +143,12 @@ class Feature(Document):
     # don't really know how it is represented in the database.
     # Hence "data" as a dict blob.
     name = StringField(default='', required=True, primary_key=True)
-    data = DictField(default={})
     manual_expiration_switch = BooleanField(default=False)
     # Time when last updated
     timestamp = DateTimeField(default=dt.datetime.now())
     is_stale_func = StringField(max_length=60)
     refresh_func = StringField(max_length=60)
-    parents = DictField(deffault={})
+    parents = DictField(default={})
 
     def __init__(self, **kwargs):
         # Create a new document
@@ -177,11 +176,11 @@ class Feature(Document):
         s = ''
         # Initialize as object name with type judgment
         if self.__expired__() | self.manual_expiration_switch:
-            s = cstr(self.name, 'fail')
+            s = messages.cstr(self.name, 'fail')
         else:
-            s = cstr(self.name, 'ok')
+            s = messages.cstr(self.name, 'ok')
         # Descriptor of this feature
-        s +=  '\t: ' + cstr(self.__class__.__name__, 'bold')
+        s +=  '\t: ' + messages.cstr(self.__class__.__name__, 'bold')
         # This feature's status
         status = self.__status__()
         if status:
@@ -297,21 +296,16 @@ class CallRecord(Document):
     Uniquely identified (with high probability) by a 40-character hexadecimal
     string.
     """
-
     uid_len = 40
 
-    # Exit codes
-    DONE = 'done'
-    FAILED = 'failed'
-    WARNING = 'warning'
-
+    meta = {'allow_inheritance': True}
     initiating_call = ReferenceField('self', required=False)
     level = IntField(default=0)
     feature = ReferenceField('Feature')
     uid = StringField(default='', max_length=uid_len, required=True, primary_key=True)
     timestamp = DateTimeField(default=dt.datetime.now())
-    user = StringField(max_length=255)
-    exit_status = StringField(max_length=40)
+    user_id = StringField(max_length=255)
+    exit_status = StringField(default='OK')
 
     def __init__(self, feature, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -332,7 +326,7 @@ class CallRecord(Document):
             h.update(str.encode(self.initiating_call.uid))
         self.uid = h.hexdigest()[:CallRecord.uid_len]
 
-        self.user =  getpass.getuser()
+        self.user_id = getpass.getuser()
 
         self.save()
 

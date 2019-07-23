@@ -1,3 +1,4 @@
 # DySART measurement tools
 
-Tools for handling measurement are to go here.
+This module is deprecated.
+

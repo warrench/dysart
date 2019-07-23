@@ -24,7 +24,7 @@ PYTHON_VERSION="3.7"
 PYENV_NAME=dysenv
 CONDA=conda
 VIRTUALENV=virtualenv
-PYTHONSTARTUP_SCRIPT=dypy_startup.py
+PYTHONSTARTUP_SCRIPT=dypy.py
 DB_OFF=db_off
 DB_ON=db_on
 ENV_OFF=env_off
@@ -186,10 +186,10 @@ function deactivate_env {
 	ENV_MANAGER=`find_env_manager`
  	printf "%-"$STATUS_COL"s" "deactivating python environment..."
 	if [[ $ENV_MANAGER = $CONDA ]] ; then
-		conda deactivate 
+		conda deactivate
     	printf "%s\n" $DONE_STR
 	elif [[ $ENV_MANAGER = $VIRTUALENV ]] ; then
-		deactivate 
+		deactivate
     	printf "%s\n" $DONE_STR
 	else
 		echo "There appears to be no python \\
@@ -328,7 +328,7 @@ function start {
   # Make sure the python interpreter's startup script is correct. Keep the old
   # one so you can restore it on stop. (Should this go in dysenv?)
   export OLD_PYTHONSTARTUP=$PYTHONSTARTUP
-  export PYTHONSTARTUP=$DYS_PATH/$PYTHONSTARTUP_SCRIPT
+  export PYTHONSTARTUP=$DYS_PATH/dysart/clients/$PYTHONSTARTUP_SCRIPT
   # Add to pythonpath
   export OLD_PYTHONPATH=$PYTHONPATH
   export PYTHONPATH=$DYS_PATH/dysart
@@ -682,4 +682,3 @@ fi
 
 # Export environment variables
 export DB_STATUS
-

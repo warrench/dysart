@@ -18,11 +18,10 @@ from mongoengine import *
 import Labber
 from Labber import ScriptTools as st
 
-from parsing.labber_serialize import load_labber_scenario_as_dict
-from parsing.labber_serialize import save_labber_scenario_from_dict
-from .feature import Feature
-from .messages import cstr
-from context import Context
+from dysart.labber.labber_serialize import load_labber_scenario_as_dict
+from dysart.labber.labber_serialize import save_labber_scenario_from_dict
+from dysart.feature import Feature, CallRecord
+from dysart.messages.messages import cstr
 
 # Set path to executable. This should be done not-here, but it needs to be put
 # somewhere for now.
@@ -32,26 +31,21 @@ try:
         st.setExePath(os.path.join(os.path.sep, 'Applications', 'Labber'))
     elif platform.system() == 'Linux':
         st.setExePath(os.path.join(os.path.sep, 'usr', 'share', 'Labber', 'Program'))
+    elif platform.system() == 'Windows':
+        pass
     else:
         raise Exception('Unsupported platform!')
 except Exception as e:
     pass
 
 """
-Connect to default labber client
-This behavior is all right for testing, but unexpected side effects like this
-should probably be considered unacceptable in deployed code.
+Register default labber client. Using a global variable is maybe all right for
+testing, but this is a pretty dangerous practice in production code.
 """
-if Context.labber_client:
-    default_client = Context.labber_client
+if globals().get('dyserver'):
+    default_client = dyserver.labber_client
 else:
-    try:
-        default_client = Labber.connectToServer('localhost')
-        # For now, connect to insruments _here_, rather than on feature init.
-        #for inst in client.getListOfInstrumentsString():
-        #    client.connectToInstrument(inst)
-    except Exception as e:
-        default_client = None
+    default_client = None
 
 
 class LabberFeature(Feature):
@@ -61,7 +55,6 @@ class LabberFeature(Feature):
 
     """
 
-    data = DictField(default={'log': [], 'fit_results': []})
     # Deserialized template file
     template = DictField(default={})
     template_diffs = DictField(default={})
@@ -86,7 +79,7 @@ class LabberFeature(Feature):
         # Deprecated by Simon's changes to Labber API?
         self.config = st.MeasurementObject(self.template_file_path,
                                            self.output_file_path)
-
+        self.data = {'log': [], 'fit_results': []}
 
     def __status__(self):
         """
@@ -139,12 +132,12 @@ class LabberFeature(Feature):
         """
         try:
             return int(os.path.splitext(log_name)[0].split('_')[-1])
-        except ValueError:  # no logfile with an integral suffix
+        except Exception:  # e.g. no logfile with integral suffix, or no file
             return 0
 
     def last_log_name(self) -> Optional[str]:
         """
-        return the name of the last-incremented log file
+        return the base name of the last-incremented log file
         """
         (output_dir, output_fn) = os.path.split(self.output_file_path)
 
@@ -152,7 +145,7 @@ class LabberFeature(Feature):
                         if fn.startswith(os.path.splitext(output_fn)[0])]
         if log_names:
             last_log = max(log_names, key=self._log_index)
-            return last_log
+            return os.path.join(output_dir, last_log)
         else:
             return None
 
@@ -243,7 +236,7 @@ class LabberFeature(Feature):
                 items['step'] = items['span']/items['n_pts']
         return new_config
 
-    def emit_labber_input_file(self):
+    def emit_labber_input_file(self) -> str:
         """
         TODO write a real docstring here
         Write a temporary .hdf5 input for Labber to consume by attempting to
@@ -301,3 +294,16 @@ class LabberFeature(Feature):
         """
         return (('fit_results' not in self.data)
                  or not self.data['fit_results'])
+
+
+class LabberCall(CallRecord):
+    """
+    TODO: docstring
+    """
+
+    # should get the max name length on the labber output directory from server
+    log_name = StringField(max_length=os.statvfs('/').f_namemax)
+
+    def __init__(self, feature, *args, **kwargs):
+        super().__init__(feature, *args, **kwargs)
+        self.log_name = feature.next_log_name()

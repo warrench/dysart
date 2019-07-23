@@ -28,6 +28,9 @@ be sort of good if you're only allowed to call methods on features and have some
 value returned.
 """
 
+import os
+import sys
+import json
 from collections import namedtuple
 from enum import Enum
 import logging
@@ -37,16 +40,100 @@ from http import HTTPStatus
 import http.server
 import socketserver
 from urllib.parse import urlparse, parse_qs
-import sys
+from typing import Optional, Union
 
 import mongoengine as me
 
-# TEMPORARY
-from measurement.equs_features import QubitRabi
+import Labber
+from dysart.messages.messages import cprint
 
+# TEMPORARY
+from dysart.equs_std.equs_features import *
 
 # container for structured requests. Develop this as you discover needs.
 Request = namedtuple('Request', ['doc_class', 'name', 'method'])
+
+# constants
+status_col = int(os.environ['STATUS_COL'])
+DEFAULT_DB_PORT = 27017
+DEFAULT_LABBER_HOST = 'localhost'
+DEFAULT_DB_HOST = 'localhost'
+
+class Dyserver():
+
+
+    def __init__(self,
+                 db_host_name=DEFAULT_DB_HOST,
+                 labber_host_name=DEFAULT_LABBER_HOST,
+                 db_host_port=DEFAULT_DB_PORT,
+                 project=None):
+        """
+        connect to standard services
+        """
+        self.db_connect(db_host_name, db_host_port)
+        self.labber_connect(labber_host_name)
+        self.load_project(project)
+        # all hard-coded constants for now. This will/must change!
+        self.logfile = os.path.join(os.environ['DYS_PATH'], 'debug_data',
+                                   'log', 'dysart.log')
+
+    def db_connect(self, host_name, host_port):
+        """
+        Set up database client for python interpreter.
+        """
+        if os.environ['DB_STATUS'] != 'db_off':
+            # Check whether the database server is running.
+            try:
+                cprint('connecting to database server...'.ljust(status_col), end='')
+                # Open a connection to the Mongo database
+                mongo_client = me.connect('debug_data', host=host_name, port=host_port)
+                """ Do the following lines do anything? I actually don't know. """
+                sys.path.pop(0)
+                sys.path.insert(0, os.getcwd())
+                cprint('done.', status='ok')
+            except Exception as e:
+                # TODO: replace this with a less general exception.
+                cprint('failed.', status='fail')
+                mongo_client = None
+        else:
+            cprint('database server is off.', status='warn')
+            mongo_client = None
+        self.mongo_client = mongo_client
+
+    def labber_connect(self, host_name):
+        """
+        sets a labber client to the default instrument server.
+        """
+        try:
+            cprint('connecting to instrument server...'.ljust(status_col), end='')
+            labber_client = Labber.connectToServer(host_name)
+            cprint('done.', status='ok')
+        except Exception as e:
+            # TODO: replace this with a less general exception.
+            print(e)
+            cprint('failed.', status='fail')
+            labber_client = None
+        finally:
+            self.labber_client = labber_client
+
+    def load_project(self, proj_name):
+        """
+        loads a project into memory.
+        """
+        return
+        """
+        if not proj_name:
+            self.proj_name = None
+        else:
+            # load each object in a project in this database
+
+            self.proj_name = proj_name
+        """
+
+    def set_project(self, proj_name):
+        """
+        sets the working project
+        """
 
 
 class Status(Enum):
@@ -69,15 +156,6 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
     GET /db_name?user=username&secret=passphrase&request=code
     """
 
-    default_response="""
-    <html>
-    <body>
-    The document you  requested contains:
-    {}
-    </body>
-    </html>
-    """
-
     # all hard-coded for now
     hosts = ['127.0.0.1']
     users = {'root':'root', 'a':'123'}
@@ -88,7 +166,7 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
     def _set_headers_ok(self):
         """set the headers for a good connection"""
         self.send_response(HTTPStatus.OK)
-        self.send_header('Content-type', 'text/html')
+        self.send_header('Content-type', 'text/json')
         self.end_headers()
 
     def _set_headers_nauth(self):
@@ -128,7 +206,9 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
         """dummy method to extract request from query string"""
         # TODO
         query = parse_qs(urlparse(self.path).query)
-        request = None
+        query_last = {field: (query.get(field)[-1] if field in query else None)
+                   for field in Request._fields}
+        request = Request(**query_last)
         return request
 
     def get_document_class(self, doc_class: str):
@@ -150,7 +230,8 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
         except me.MultipleObjectsReturned:  # some other error status code
             # Don't do anything yet; just propagate the exception
             raise me.MultipleObjectsReturned
-        return res
+        payload = json.dumps({'res': res})
+        return payload
 
     def do_GET(self):
         print("got a {} from client {}:\n{}\n".format(self.command, self.client_address, self.requestline))
@@ -170,9 +251,11 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
         # tell them the path they requested
         try:
             db = ''
-            request = Request(doc_class='QubitRabi', name='qb_rabi', method='__str__')
-            doc = self.handle_request(db, request)
-            response = self.default_response.format(doc).encode('utf-8')
+            # request = Request(doc_class='QubitRabi', name='qb_rabi', method='__str__')
+            request = self.get_request()
+            print(request)
+            payload = self.handle_request(db, request)
+            response = payload.encode('utf-8')
 
             self._set_headers_ok()
             self.wfile.write(response)
@@ -204,8 +287,10 @@ class Scheduler(Queue):
         new_job.run()
 
 
-#if __name__ == '__main__':
-PORT = 8000  # for now, a hardcoded constant
-with socketserver.TCPServer(("", PORT), DysHandler) as httpd:
-    print("serving at port", PORT)
-    httpd.serve_forever()
+if __name__ == '__main__':
+    Context.db_client = db_connect('localhost', 27017)
+    Context.labber_client = labber_connect('localhost')
+    PORT = 8000  # for now, a hardcoded constant
+    with socketserver.TCPServer(("", PORT), DysHandler) as httpd:
+        print("serving at port", PORT)
+        httpd.serve_forever()
