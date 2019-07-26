@@ -16,7 +16,7 @@ import mongoengine as me
 import Labber
 import importlib.util
 
-sys.path.append(os.path.join(os.environ['DYS_PATH']))
+from toplevel.conf import dys_path, config
 from dysart.server.server import Dyserver
 import dysart.messages.messages as messages
 
@@ -25,21 +25,21 @@ def feature_tree_setup():
     Set up a default feature tree, e.g. specified by a config script
     """
     try:
-        tree_path = os.environ['DEFAULT_TREE']
+        proj_path = config['DEFAULT_PROJ']
     except KeyError:
         return
     try:
-        tree_module_path = os.path.join(tree_path)
-        tree_spec = importlib.util.spec_from_file_location(
-                        'tree', tree_module_path
+        proj_module_path = os.path.join(proj_path)
+        proj_spec = importlib.util.spec_from_file_location(
+                        'proj', proj_module_path
                     )
-        tree = importlib.util.module_from_spec(tree_spec)
-        tree_spec.loader.exec_module(tree)
+        proj = importlib.util.module_from_spec(proj_spec)
+        proj_spec.loader.exec_module(proj)
         # Get the feature names from the tree
-        feature_names = [name for name in dir(tree)
-                            if isinstance(getattr(tree, name), me.Document)]
+        feature_names = [name for name in dir(proj)
+                            if isinstance(getattr(proj, name), me.Document)]
         # And put them in the global namespace
-        globals().update({name: getattr(tree, name) for name in feature_names})
+        globals().update({name: getattr(proj, name) for name in feature_names})
 
     except Exception as e:
         print(str(e))

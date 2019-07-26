@@ -16,8 +16,9 @@ from warnings import warn
 # and getting environment variables.
 CONFIG_FN = '.dysart.conf'
 dys_path = os.path.abspath(os.path.join(
-                 __file__, os.path.pardir, os.path.pardir))
+            __file__, os.path.pardir, os.path.pardir))
 config_path = os.path.join(dys_path, CONFIG_FN)
+
 
 class FileMapping:
     """Implements a mapping interface over a file.
@@ -28,12 +29,15 @@ class FileMapping:
         self.path = path
         self.sep = sep
 
+    def _ensure_exists(self):
+        self.open('a').close()
+
     def get_line_key(self, line: str) -> str:
         """return the key associated with a line of text"""
         line_key, *_ = line.split(self.sep)
         return line_key.strip()
 
-    def open(self, mode: str) -> typing.Type[io.TextIOWrapper]:
+    def open(self, mode: str) -> io.TextIOWrapper:
         """return an open file descriptor to the config file"""
         return open(self.path, mode)
 
@@ -46,8 +50,11 @@ class FileMapping:
             val = default
         return val
 
-    def _ensure_exists(self):
-        self.open('a').close()
+    def keys(self) -> typing.List[str]:
+        """"""
+
+    def values(self) -> typing.List[str]:
+        """"""
 
     def __iter__(self):
         self._ensure_exists()
@@ -73,6 +80,9 @@ class FileMapping:
         except KeyError:
             return False
 
+    def __missing__(self):
+        pass
+
     def __setitem__(self, key: str, val: str) -> None:
         """write a single value by parameter name into the config file"""
         if self.sep in key:
@@ -80,9 +90,9 @@ class FileMapping:
         if self.sep in val:
             raise ValueError('{} contains sepatator \'{}\''.format(val, self.sep))
         if key.strip() != key:
-            warnings.warn('key \'{}\' contains whitespace and will be stripped'.format(key))
+            warn('key \'{}\' contains whitespace and will be stripped'.format(key))
         if val.strip() != val:
-            warnings.warn('value \'{}\' contains whitespace and will be stripped'.format(key))
+            warn('value \'{}\' contains whitespace and will be stripped'.format(key))
         # search for key in file and replace
         self._ensure_exists()
         with fileinput.input(self.path, inplace=True) as f:
@@ -106,7 +116,7 @@ class FileMapping:
         if self.sep in key:
             raise ValueError('{} contains sepatator \'{}\''.format(key, self.sep))
         if key.strip() != key:
-            warnings.warn('key \'{}\' contains whitespace and will be stripped'.format(key))
+            warn('key \'{}\' contains whitespace and will be stripped'.format(key))
         # search for key in file and delete line
         self._ensure_exists()
         with fileinput.input(self.path, inplace=True) as f:
@@ -115,5 +125,6 @@ class FileMapping:
                 line_key = self.get_line_key(line)
                 if line_key != key:
                     print(line)
+
 
 config = FileMapping(config_path)

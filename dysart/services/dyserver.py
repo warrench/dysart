@@ -1,4 +1,4 @@
- # -* coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 """
 Author: mcncm 2019
@@ -30,22 +30,27 @@ value returned.
 
 import os
 import sys
-import json
 from collections import namedtuple
 from enum import Enum
-import logging
-from threading import Thread
-from queue import PriorityQueue, Queue
 from http import HTTPStatus
 import http.server
+from io import StringIO
+import json
+import logging
+from queue import PriorityQueue, Queue
 import socketserver
+from threading import Thread
+from typing import Optional, Union, Tuple
 from urllib.parse import urlparse, parse_qs
-from typing import Optional, Union
 
 import mongoengine as me
-
 import Labber
-from dysart.messages.messages import cprint
+
+import dysart.messages.messages as messages
+from dysart.messages.messages import StatusMessage
+from dysart.messages.errors import *
+import dysart.services.service as service
+import toplevel.conf as conf
 
 # TEMPORARY
 from dysart.equs_std.equs_features import *
@@ -53,68 +58,73 @@ from dysart.equs_std.equs_features import *
 # container for structured requests. Develop this as you discover needs.
 Request = namedtuple('Request', ['doc_class', 'name', 'method'])
 
-# constants
-status_col = int(os.environ['STATUS_COL'])
-DEFAULT_DB_PORT = 27017
-DEFAULT_LABBER_HOST = 'localhost'
-DEFAULT_DB_HOST = 'localhost'
 
-class Dyserver():
+class Dyserver(service.Service):
 
-
-    def __init__(self,
-                 db_host_name=DEFAULT_DB_HOST,
-                 labber_host_name=DEFAULT_LABBER_HOST,
-                 db_host_port=DEFAULT_DB_PORT,
+    def __init__(self, port=None,
+                 db_host=None,
+                 db_port=None,
+                 labber_host=None,
                  project=None):
         """
         connect to standard services
         """
-        self.db_connect(db_host_name, db_host_port)
-        self.labber_connect(labber_host_name)
-        self.load_project(project)
+        self.port = port if port else int(conf.config['SERVER_PORT'])
+        self.db_host = db_host if db_host else conf.config['DB_HOST']
+        self.db_port = db_port if db_port else int(conf.config['DB_PORT'])
+        self.labber_host = labber_host if labber_host else conf.config['LABBER_HOST']
+        self.project = project
         # all hard-coded constants for now. This will/must change!
-        self.logfile = os.path.join(os.environ['DYS_PATH'], 'debug_data',
-                                   'log', 'dysart.log')
+        self.logfile = os.path.join(conf.dys_path, 'debug_data',
+                                    'log', 'dysart.log')
 
-    def db_connect(self, host_name, host_port):
+    def is_running(self) -> bool:
+        return hasattr(self, 'httpd')
+
+    def _start(self) -> None:
+        """Connects to services and runs the server continuously"""
+        try:
+            self.db_connect(self.db_host, self.db_port)
+            self.labber_connect(self.labber_host)
+            self.load_project(self.project)
+        except ConnectionError:
+            pass
+        #with socketserver.TCPServer(("", self.port), DysHandler) as self.httpd:
+        #    self.httpd.serve_forever()
+
+    def _stop(self) -> None:
+        """Ends the server process"""
+        self.httpd.shutdown()
+
+    def db_connect(self, host_name, host_port) -> None:
         """
-        Set up database client for python interpreter.
+        Sets up database client for python interpreter.
         """
-        if os.environ['DB_STATUS'] != 'db_off':
-            # Check whether the database server is running.
+        with StatusMessage('{}connecting to database server...'.format(messages.TAB)):
             try:
-                cprint('connecting to database server...'.ljust(status_col), end='')
-                # Open a connection to the Mongo database
                 mongo_client = me.connect('debug_data', host=host_name, port=host_port)
-                """ Do the following lines do anything? I actually don't know. """
+                # Do the following lines do anything? I actually don't know.
                 sys.path.pop(0)
                 sys.path.insert(0, os.getcwd())
-                cprint('done.', status='ok')
             except Exception as e:
-                # TODO: replace this with a less general exception.
-                cprint('failed.', status='fail')
                 mongo_client = None
-        else:
-            cprint('database server is off.', status='warn')
-            mongo_client = None
-        self.mongo_client = mongo_client
+                raise ConnectionError
+            finally:
+                self.mongo_client = mongo_client
 
-    def labber_connect(self, host_name):
+    def labber_connect(self, host_name) -> None:
         """
         sets a labber client to the default instrument server.
         """
-        try:
-            cprint('connecting to instrument server...'.ljust(status_col), end='')
-            labber_client = Labber.connectToServer(host_name)
-            cprint('done.', status='ok')
-        except Exception as e:
-            # TODO: replace this with a less general exception.
-            print(e)
-            cprint('failed.', status='fail')
-            labber_client = None
-        finally:
-            self.labber_client = labber_client
+        with StatusMessage('{}connecting to instrument server...'.format(messages.TAB)):
+            try:
+                with LabberContext():
+                    labber_client = Labber.connectToServer(host_name)
+            except ConnectionError as e:
+                labber_client = None
+                raise ConnectionError
+            finally:
+                self.labber_client = labber_client
 
     def load_project(self, proj_name):
         """
@@ -136,16 +146,25 @@ class Dyserver():
         """
 
 
-class Status(Enum):
-    """
-    a simple enum type to make certain success and failure conditions more
-    explicit
-    """
-    OK = 0
-    FAIL = 1
+class LabberContext:
+    """A context manager to wrap connections to Labber and capture errors"""
 
-    def __bool__(self):
-        return self == self.OK
+    def __enter__(self):
+        sys.stdout = sys.stderr = self.buff = StringIO()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__  # restore I/O
+        if self._error():
+            raise ConnectionError
+
+    def _error(self) -> bool:
+        """Checks if an error condition is found in temporary I/O buffer"""
+        return 'Error' in self.buff.getvalue()
+
+
+class AuthStatus(Enum):
+    FAIL = 0
+    OK = 1
 
 
 class DysHandler(http.server.BaseHTTPRequestHandler):
@@ -156,12 +175,14 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
     GET /db_name?user=username&secret=passphrase&request=code
     """
 
-    # all hard-coded for now
-    hosts = ['127.0.0.1']
-    users = {'root':'root', 'a':'123'}
+    # remote hosts from which incoming connections will be accepted.
+    hosts = conf.config.get('REMOTE_HOSTS', '127.0.0.1').split(',')
+    # hard-coded for now
+    users = {'root': 'root', 'a': '123'}
 
-    qs_tokens = {'user':'user', 'secret':'secret',
-                 'class':'class', 'feature':'feature', 'method':'method'}
+    # right now, this redundancy is an unnecessarily layer of indirection
+    qs_tokens = {'user': 'user', 'secret': 'secret',
+                 'class': 'class', 'feature': 'feature', 'method': 'method'}
 
     def _set_headers_ok(self):
         """set the headers for a good connection"""
@@ -184,30 +205,30 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
     def _check_host(self, user):
         """dummy method for checking that a host is on the whitelist"""
         if host in self.hosts:
-            return Status.OK
+            return AuthStatus.OK
         else:
-            return Status.FAIL
+            return AuthStatus.FAIL
 
     def _check_credentials(self, user, secret):
         """dummy method for user verification"""
         if user and self.users.get(user) == secret:
-            return Status.OK
+            return AuthStatus.OK
         else:
-            return Status.FAIL
+            return AuthStatus.FAIL
 
-    def get_credentials(self) -> (str, str):
+    def get_credentials(self) -> Tuple[Optional[str], Optional[str]]:
         """dummy method to get user creds in request"""
         query = parse_qs(urlparse(self.path).query)
         users = query.get(self.qs_tokens['user'])
         secrets = query.get(self.qs_tokens['secret'])
         return (users[-1] if users else None, secrets[-1] if secrets else None)
 
-    def get_request(self) -> str:
+    def get_request(self) -> Request:
         """dummy method to extract request from query string"""
         # TODO
         query = parse_qs(urlparse(self.path).query)
         query_last = {field: (query.get(field)[-1] if field in query else None)
-                   for field in Request._fields}
+                      for field in Request._fields}
         request = Request(**query_last)
         return request
 
@@ -216,7 +237,6 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
         assumes that this class is in the global namespace
         this is a total hack for right now"""
         return globals()[doc_class]
-        #return getattr(sys.modules[__name__], doc_class)
 
     def handle_request(self, db, request):
         """dummy method for interpreting and fulfilling the request"""
@@ -241,7 +261,7 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
             Exception('bad client address: {}'.format(self.client_address))
 
         (user, secret) = self.get_credentials()
-        if self._check_credentials(user, secret) == Status.FAIL:
+        if self._check_credentials(user, secret) == AuthStatus.FAIL:
             print('bad request: user \'{}\', cred \'{}\''.format(user, secret))
             self._set_headers_nauth()
             return
@@ -251,7 +271,6 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
         # tell them the path they requested
         try:
             db = ''
-            # request = Request(doc_class='QubitRabi', name='qb_rabi', method='__str__')
             request = self.get_request()
             print(request)
             payload = self.handle_request(db, request)
@@ -285,12 +304,3 @@ class Scheduler(Queue):
     def get(block=True, timeout=None):
         new_job = super().get(block=block, timeout=timeout)
         new_job.run()
-
-
-if __name__ == '__main__':
-    Context.db_client = db_connect('localhost', 27017)
-    Context.labber_client = labber_connect('localhost')
-    PORT = 8000  # for now, a hardcoded constant
-    with socketserver.TCPServer(("", PORT), DysHandler) as httpd:
-        print("serving at port", PORT)
-        httpd.serve_forever()

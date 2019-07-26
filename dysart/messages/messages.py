@@ -1,19 +1,30 @@
 """
+Author: mcncm, 2019
 Standard output messages for displaying hierarchically-organized data such as
 recursively-called status lines.
 """
 
 import os
-import logging
+import sys
+import datetime as dt
+from functools import wraps
 import getpass
 import inspect
-import datetime as dt
+from io import StringIO
+import logging
+import platform
 import textwrap
-from functools import wraps
+
+import toplevel.conf as conf
+from dysart.messages.errors import DysartError
+
+DEFAULT_COL = 48
+TAB = ' ' * 4
+
 
 class Bcolor:
     """
-    Enum class for colored printing
+    Enum for colored printing
     """
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -25,25 +36,76 @@ class Bcolor:
     ITALIC = '\033[3m'
     UNDERLINE = '\033[4m'
 
-def pprint_func(name, doc):
+
+class StatusMessage:
+    """
+    A simple context manager for printing informative status messages about
+    ongoing administration tasks.
+
+    TODO: document parameters, etc.
+    """
+
+    def __init__(self, infostr: str, donestr: str = 'done.',
+                 failstr: str = 'failed.', capture_io: bool = True):
+        self.infostr = infostr
+        self.donestr = donestr
+        self.failstr = donestr
+        self.num_cols = max(int(conf.config.get('STATUS_COL') or DEFAULT_COL),
+                            len(infostr))
+        self.status = 'ok'
+        self.__old_stdout, self.__old_stderr = sys.stdout, sys.stderr
+        self.__capture_io = capture_io
+
+    def __enter__(self):
+        """Prints a message describing the action taken"""
+        cprint(self.infostr.ljust(self.num_cols).capitalize(), status='normal',
+               end='', flush=True)
+        if self.__capture_io:
+            sys.stdout = self.stdout_buff = StringIO()
+            sys.stderr = self.stderr_buff = StringIO()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Cleans up and prints the terminating status string."""
+        if exc_type is None:
+            cprint(self.donestr, status='ok', file=self.__old_stdout)
+        else:
+            status = 'fail'
+            failstr = self.failstr
+            if isinstance(exc_value, DysartError):
+                status = exc_value.status
+                failstr = exc_value.message
+            cprint(failstr, status, file=self.__old_stdout)
+            if 'VERBOSE_MESSAGES' in conf.config:
+                print(exc_value)
+        if self.__capture_io:
+            sys.stdout, sys.stderr = self.__old_stdout, self.__old_stderr
+            sys.stdout.write(self.stdout_buff.getvalue())
+            sys.stderr.write(self.stderr_buff.getvalue())
+        return True
+
+
+def pprint_func(name: str, doc: str) -> None:
     """
     TODO real docstring for pprint_property
     Takes a name docstring of a function, an, and formats and pretty-prints them.
     """
     # Number of columns in the formatted docscring
-    status_col = int(os.environ['STATUS_COL'])
+    status_col = int(conf.config.get('STATUS_COL') or DEFAULT_COL)
     # Prepare the docstring: fix up whitespace for display
     doc = ' '.join(doc.strip().split())
     # Prepare the docstring: wrap it and indent it
     doc = '\t' + '\n\t'.join(textwrap.wrap(doc, status_col))
     # Finally, print the result
     print(cstr(name, status='bold') + '\n' + cstr(doc, status='italic') + '\n')
-    
 
-def cstr(s, status='normal'):
+
+def cstr(s: str, status: str = 'normal') -> str:
     """
     Wrap a string with ANSI color annotations
     """
+    if platform.system() == 'Windows':
+        return s  # ANSI colors unsupported on Windows
+
     if status == 'ok':
         return Bcolor.OKGREEN + s + Bcolor.ENDC
     elif status == 'fail':
@@ -59,13 +121,15 @@ def cstr(s, status='normal'):
     else:
         return s
 
-def cprint(s, status='normal', **kwargs):
+
+def cprint(s: str, status: str = 'normal', **kwargs):
     """
     Print a string with ANSI color annotations
     """
     print(cstr(s, status), **kwargs)
 
-def msg1(message, level=0, end="\n"):
+
+def msg1(message: str, level=0, end="\n"):
     """
     Print a formatted message to stdout.
     Accepts an optional level parameter, which is useful when you might wish
@@ -77,7 +141,7 @@ def msg1(message, level=0, end="\n"):
     print(output, end=end)
 
 
-def msg2(message, level=0, end="\n"):
+def msg2(message: str, level=0, end="\n"):
     """
     Print a formatted message to stdout.
     Accepts an optional level parameter, which is useful when you might wish
@@ -89,11 +153,12 @@ def msg2(message, level=0, end="\n"):
     print(output, end=end)
 
 
-def write_log(message):
+def write_log(message: str):
     """
     Write a message to a log file with date and time information.
     """
     logging.info(message)
+
 
 def logged(stdout=True, message='log event', **kwargs):
     """
@@ -125,7 +190,7 @@ def logged(stdout=True, message='log event', **kwargs):
             spec = inspect.getargspec(fn)
             if spec.args and spec.args[0] == 'self':
                 # TODO: note that this isn't really airtight. It is not a rule
-                # of the syntax that argument 0 must be called 'self' for a 
+                # of the syntax that argument 0 must be called 'self' for a
                 # class method.
                 caller = args_inner[0]
                 msg_prefix = caller.name + ' | '
@@ -141,6 +206,7 @@ def logged(stdout=True, message='log event', **kwargs):
         return wrapped
     return decorator
 
+
 def configure_logging(logfile=''):
     """
     Set up the logging module to write to the correct logfile, etc.
@@ -153,7 +219,7 @@ def configure_logging(logfile=''):
         logfile = os.devnull
 
     # TODO: I should really take advantage of some of the more advanced
-    # features of the logging module. 
+    # features of the logging module.
     user = getpass.getuser()
     log_format = '%(asctime)s | ' + user + " | %(message)s"
     date_format = '%m/%d/%Y %I:%M:%S'
