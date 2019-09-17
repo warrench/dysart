@@ -2,11 +2,12 @@
 Utilities for the DySART toplevel. Abstracts config file handling.
 """
 
-import fileinput
 import io
 import os
+from collections.abc import MutableMapping
+import fileinput
 import sys
-import typing
+from typing import IO, Optional
 from warnings import warn
 
 # a configuration file is necessary because it contains settings information
@@ -20,7 +21,7 @@ dys_path = os.path.abspath(os.path.join(
 config_path = os.path.join(dys_path, CONFIG_FN)
 
 
-class FileMapping:
+class FileMapping(MutableMapping):
     """Implements a mapping interface over a file.
     (Why isn't this in the standard library? Is it?)
     """
@@ -37,11 +38,11 @@ class FileMapping:
         line_key, *_ = line.split(self.sep)
         return line_key.strip()
 
-    def open(self, mode: str) -> io.TextIOWrapper:
+    def open(self, mode: str) -> IO:
         """return an open file descriptor to the config file"""
         return open(self.path, mode)
 
-    def get(self, key: str, default=None) -> typing.Optional[str]:
+    def get(self, key: str, default=None) -> Optional[str]:
         """return the value for a key if it is in the file, otherwise return
         the default value."""
         try:
@@ -50,11 +51,16 @@ class FileMapping:
             val = default
         return val
 
+    """
     def keys(self) -> typing.List[str]:
-        """"""
+        do this better
+        self._ensure_exists()
+        with self.open('r') as f:
+            for line in f:
+                yield self.get_line_key(line)
+    """
 
-    def values(self) -> typing.List[str]:
-        """"""
+    #def values(self) -> typing.List[str]:
 
     def __iter__(self):
         self._ensure_exists()
@@ -72,16 +78,24 @@ class FileMapping:
                     return val.strip()
         raise KeyError(key)
 
-    def  __contains__(self, key: str) -> bool:
-        """check whether the config file contains a key or not"""
-        try:
-            self.__getitem__(key)
-            return True
-        except KeyError:
-            return False
+    def __len__(self):
+        """get the length of the config file"""
+        self._ensure_exists()
+        with self.open('r') as f:
+            # just count the number of non-whitespace lines
+            n = sum(1 for line in f.readlines() if not line.isspace())
+        return n
 
-    def __missing__(self):
-        pass
+    #def  __contains__(self, key: str) -> bool:
+    #    """check whether the config file contains a key or not"""
+    #    try:
+    #        self.__getitem__(key)
+    #        return True
+    #    except KeyError:
+    #        return False
+
+    #def __missing__(self):
+    #    pass
 
     def __setitem__(self, key: str, val: str) -> None:
         """write a single value by parameter name into the config file"""

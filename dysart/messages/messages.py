@@ -87,8 +87,10 @@ class StatusMessage:
 def pprint_func(name: str, doc: str) -> None:
     """
     TODO real docstring for pprint_property
-    Takes a name docstring of a function, an, and formats and pretty-prints them.
+    Takes a name and docstring of a function and formats and pretty-prints them.
     """
+    if doc is None:
+        return
     # Number of columns in the formatted docscring
     status_col = int(conf.config.get('STATUS_COL') or DEFAULT_COL)
     # Prepare the docstring: fix up whitespace for display

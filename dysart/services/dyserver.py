@@ -30,6 +30,7 @@ value returned.
 
 import os
 import sys
+import asyncio
 from collections import namedtuple
 from enum import Enum
 from http import HTTPStatus
@@ -39,7 +40,6 @@ import json
 import logging
 from queue import PriorityQueue, Queue
 import socketserver
-from threading import Thread
 from typing import Optional, Union, Tuple
 from urllib.parse import urlparse, parse_qs
 
@@ -50,6 +50,7 @@ import dysart.messages.messages as messages
 from dysart.messages.messages import StatusMessage
 from dysart.messages.errors import *
 import dysart.services.service as service
+from dysart.services.jobscheduler import Job, JobScheduler
 import toplevel.conf as conf
 
 # TEMPORARY
@@ -73,6 +74,7 @@ class Dyserver(service.Service):
         self.db_host = db_host if db_host else conf.config['DB_HOST']
         self.db_port = db_port if db_port else int(conf.config['DB_PORT'])
         self.labber_host = labber_host if labber_host else conf.config['LABBER_HOST']
+        self.job_scheduler = JobScheduler()
         self.project = project
         # all hard-coded constants for now. This will/must change!
         self.logfile = os.path.join(conf.dys_path, 'debug_data',
@@ -86,37 +88,40 @@ class Dyserver(service.Service):
         try:
             self.db_connect(self.db_host, self.db_port)
             self.labber_connect(self.labber_host)
+            self.job_scheduler.start('{}Starting job scheduler...'.format(messages.TAB))
             self.load_project(self.project)
-        except ConnectionError:
-            pass
+        except ConnectionError as e:
+            raise e
+            #pass
         #with socketserver.TCPServer(("", self.port), DysHandler) as self.httpd:
         #    self.httpd.serve_forever()
 
     def _stop(self) -> None:
         """Ends the server process"""
-        self.httpd.shutdown()
+        self.job_scheduler.stop()
+        # self.httpd.shutdown()
 
     def db_connect(self, host_name, host_port) -> None:
         """
         Sets up database client for python interpreter.
         """
-        with StatusMessage('{}connecting to database server...'.format(messages.TAB)):
+        with StatusMessage('{}connecting to database...'.format(messages.TAB)):
             try:
-                mongo_client = me.connect('debug_data', host=host_name, port=host_port)
+                client = me.connect('debug_data', host=host_name, port=host_port)
                 # Do the following lines do anything? I actually don't know.
                 sys.path.pop(0)
                 sys.path.insert(0, os.getcwd())
             except Exception as e:
-                mongo_client = None
+                client = None
                 raise ConnectionError
             finally:
-                self.mongo_client = mongo_client
+                self.db_client = client
 
     def labber_connect(self, host_name) -> None:
         """
         sets a labber client to the default instrument server.
         """
-        with StatusMessage('{}connecting to instrument server...'.format(messages.TAB)):
+        with StatusMessage('{}Connecting to instrument server...'.format(messages.TAB)):
             try:
                 with LabberContext():
                     labber_client = Labber.connectToServer(host_name)
@@ -125,6 +130,13 @@ class Dyserver(service.Service):
                 raise ConnectionError
             finally:
                 self.labber_client = labber_client
+
+    def job_scheduler_connect(self) -> None:
+        self.job_scheduler = jobscheduler.JobScheduler()
+        self.job_scheduler.start()
+
+    def provision_object(self, cls, name):
+        pass
 
     def load_project(self, proj_name):
         """
@@ -282,25 +294,3 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
             self._set_headers_notfound()
         except me.MultipleObjectsReturned:
             pass
-
-
-class Job:
-    """
-    a job to be run by the scheduler
-    """
-
-    def __init__(self, calllback):
-        self.callback = callback
-
-    def run(self):
-        self.callback()
-
-
-class Scheduler(Queue):
-    """
-    an instance of the Scheduler class handles job assignment and dispatch
-    """
-
-    def get(block=True, timeout=None):
-        new_job = super().get(block=block, timeout=timeout)
-        new_job.run()

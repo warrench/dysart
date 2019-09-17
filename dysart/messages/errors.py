@@ -9,6 +9,11 @@ class ServiceError(DysartError):
     pass
 
 
+class JobError(ServiceError):
+    status = 'warn'
+    message = 'job failed.'
+
+
 class AlreadyOnError(ServiceError):
     status = 'fail'
     message = 'already on.'

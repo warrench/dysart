@@ -1,5 +1,6 @@
 import os
 import sys
+from abc import ABC, abstractmethod
 from enum import Enum
 import platform
 import shutil
@@ -10,25 +11,20 @@ from dysart.messages.errors import AlreadyOnError, AlreadyOffError, ServiceError
 from dysart.messages.messages import StatusMessage
 
 
-# this is not the correct way to handle this.
-REQUIREMENTS = [
-    'numpy','lmfit','pymongo','mongoengine','h5py','jsonschema','matplotlib','pint','pyqt5'
-]
+class Service(ABC):
 
-ENV_NAME = 'dysenv'
-PYTHON_VERSION = '3.7'
-
-
-class Service():
-
-    def start(self):
-        with StatusMessage('Starting {}...'.format(self.__class__.__name__)):
+    def start(self, message=None):
+        if message is None:
+            message = 'Starting {}...'.format(self.__class__.__name__)
+        with StatusMessage(message):
             if self.is_running():
                 raise AlreadyOnError
             self._start()
 
-    def stop(self):
-        with StatusMessage('Stopping {}...'.format(self.__class__.__name__)):
+    def stop(self, message=None):
+        if message is None:
+            message = 'Stopping {}...'.format(self.__class__.__name__)
+        with StatusMessage(message):
             if not self.is_running():
                 raise AlreadyOffError
             self._stop()
@@ -39,12 +35,15 @@ class Service():
             if not self.is_running():
                 raise ServiceError  # This is pretty bad. Shouldn't be an error.
 
+    @abstractmethod
     def is_running(self) -> bool:
         """placeholder"""
 
+    @abstractmethod
     def _start(self):
         pass
 
+    @abstractmethod
     def _stop(self):
         pass
 
@@ -71,10 +70,10 @@ def env_create() -> None:
     with StatusMessage('creating virtual environment...'):
         if env_manager == 'venv':
             subprocess.run(['virtualenv', os.path.join(dys_path, ENV_NAME),
-                            '--python=python{}'.format(PYTHON_VERSION)])
+                            '--python=python{}'.format(conf.config[PYTHON_VERSION])])
         elif env_manager == 'conda':
             subprocess.run(['conda', 'create', '-y', '-n', ENV_NAME,
-                            'python={}'.format(PYTHON_VERSION)])
+                            'python={}'.format(conf.config[PYTHON_VERSION])])
         else:
             EnvironmentError('unsupported environment manager: {}'.format(env_manager))
 

@@ -6,11 +6,15 @@ things up by passing in-memory data buffers to reduce the number of writes,
 etc.
 """
 
-import copy
 import os
+import sys
+import copy
+from functools import wraps
+import numbers
 import platform
+import re
 import tempfile
-from typing import Optional  # gotta have those maybe types
+from typing import List, Optional, Callable
 from warnings import warn
 
 import numpy as np
@@ -20,8 +24,10 @@ from Labber import ScriptTools as st
 
 from dysart.labber.labber_serialize import load_labber_scenario_as_dict
 from dysart.labber.labber_serialize import save_labber_scenario_from_dict
-from dysart.feature import Feature, CallRecord
+from dysart.labber.labber_util import no_recorded_result
+from dysart.feature import Feature, CallRecord, refresh
 from dysart.messages.messages import cstr
+import toplevel.conf as conf
 
 # Set path to executable. This should be done not-here, but it needs to be put
 # somewhere for now.
@@ -42,25 +48,164 @@ except Exception as e:
 Register default labber client. Using a global variable is maybe all right for
 testing, but this is a pretty dangerous practice in production code.
 """
-if globals().get('dyserver'):
-    default_client = dyserver.labber_client
-else:
-    default_client = None
+default_client = globals().get('dyserver')
+
+
+class result:
+    """This decorator class annotates a result-yielding method of a Labber feature.
+    """
+    def __init__(self, fn: Callable) -> None:
+        """This adccepts a 'result-granting' function and returns a refresh function
+        whose return value is cached into the `results` field of `feature` with key
+        the name of the wrapped function.
+
+        TODO: Some bad assumptions are being made here:
+        * It _forces_ users to remember to name an argument `index`. Nobody will
+            remember this. This is a terrible api.
+        * It assumes that such a function wants to use only a _single_ result.
+
+        TODO: think about it and assign `index` correctly...
+        """
+
+        # First wrap the function to make it refresh
+        self.obj = None
+
+        @wraps(fn)
+        def wrapped_fn(*args, **kwargs):
+            feature = args[0] # TODO: is this good practice?
+
+            index = kwargs.get('index') or -1  # default last entry
+            hist_len = len(feature.log_history)
+            # Ensure that `results` is long enough.
+            if index < 0:
+                index = len(feature.log_history) + index
+            while len(feature.results) <= index:
+                feature.results.append({})
+
+            try:
+                return_value = feature.results[index][fn.__name__]
+            except:
+                # TODO: Pokemon exception handling
+                return_value = fn(*args, **kwargs)
+                feature.results[index][fn.__name__] = return_value
+                feature.save()
+            return return_value
+
+        wrapped_fn.is_result = True
+        self.wrapped_fn = refresh(wrapped_fn)
+        self.__name__ = wrapped_fn.__name__
+
+    def __get__(self, obj, objtype):
+        """Hack to bind this callable to the parent object.
+        """
+        self.obj = obj
+        return self
+
+    def __call__(self, *args, **kwargs):
+        return self.wrapped_fn(self.obj, *args, **kwargs)
+
+
+class LogHistory:
+    """Abstracts history of Labber output files as an array-like object. This
+    should be considered mostly an implementation detail of the Results class.
+
+    TODO: should this subclass an abc?
+    TODO: should this support slicing?
+    TODO: should/can we assume that there are never any holes in the history?
+          currently _assumes that there are no holes._
+    TODO: cache size is currently unbounded.
+
+    """
+
+    def __init__(self, labber_data_dir: str, log_name_template: str):
+        self.labber_data_dir = labber_data_dir
+        self.log_name_template = log_name_template
+        self.log_cache = {}  # contains logs that are held in memory
+
+    def __getitem__(self, index: int) -> "Optional[Labber.LogFile]":  # not sure of type?
+        # TODO: _really_ think if this is the right way to write this
+        if index < 0:
+            return self.__getitem__(len(self) + index)
+        else:
+            log_path = self.log_path(index)
+            if not os.path.isfile(log_path):
+                raise IndexError('Labber logfile with index {} cannot be found'.format(index))
+            if log_path not in self.log_cache:
+                log_file = Labber.LogFile(self.log_path(index))
+                self.log_cache[log_path] = []
+                for i in range(log_file.getNumberOfEntries()):
+                    self.log_cache[log_path].append(log_file.getEntry(i))
+
+            return self.log_cache[log_path]
+
+    def __contains__(self, index: int) -> bool:
+        """Check whether an index is used"""
+        return self.log_name(index) in os.listdir(self.labber_data_dir)
+
+    def __iter__(self):
+        self._n = 0
+        return self
+
+    def __next__(self):
+        if self._n <= len(self.get_log_paths()):
+            log = self.__getitem__(self._n)
+            self._n += 1
+            return log
+        else:
+            raise StopIteration
+
+    def __len__(self) -> int:
+        """Gets the number of extant logfiles."""
+        return sum([(1 if self.is_log(fn) else 0)
+                    for fn in os.listdir(self.labber_data_dir)])
+
+    def __bool__(self) -> bool:
+        """Returns True iff there is at least one entry"""
+        return any([(1 if self.is_log(fn) else 0)
+                    for fn in os.listdir(self.labber_data_dir)])
+
+    def log_name(self, index: int) -> str:
+        """Gets the log name associated with an index"""
+        return f'_{index}'.join(os.path.splitext(self.log_name_template))
+
+    def log_path(self, index: int) -> str:
+        """Gets the log path associated with an index"""
+        return os.path.join(self.labber_data_dir, self.log_name(index))
+
+    def get_index(self, file_name: str) -> Optional[int]:
+        """Gets the index of a filename if it is an output log name, or None if
+        it is not."""
+        root, ext = os.path.splitext(self.log_name_template)
+        m = re.search('^' + root + '_(\d+)' + ext + '$', file_name)
+        return int(m.groups()[0]) if m else None
+
+    def is_log(self, file_name: str) -> bool:
+        """Checks if a file name corresponds to an output file in the history"""
+        return self.get_index(file_name) is not None
+
+    def get_log_paths(self) -> List[str]:
+        """Gets all the logs saved in the labber data directory"""
+        return [os.path.join(self.labber_data_dir, p)
+                for p in os.listdir(self.labber_data_dir)
+                if self.is_log(p)]
+
+    def next_log_path(self) -> str:
+        """Gets the path of the next log file to be created"""
+        return self.log_path(len(self))
 
 
 class LabberFeature(Feature):
-    """
-    Feature class specialized for integration with Labber.
+    """Feature class specialized for integration with Labber.
     Init takes the address of a labber server as an argument.
-
     """
 
     # Deserialized template file
     template = DictField(default={})
     template_diffs = DictField(default={})
+    # TODO note Mongodb docs on performance of ReferenceFields
+    results = ListField(DictField(), default=list)
     template_file_path = ''
     output_file_path = ''
-    MAX_LOG_INDEX = 1000
 
     def __init__(self, labber_client=default_client, **kwargs):
         if default_client:
@@ -72,6 +217,7 @@ class LabberFeature(Feature):
         if not self.template:
             self.deserialize_template()
 
+
         # Set nondefault parameters
         #for kwarg in kwargs:
         #    self.set_value(kwarg, kwargs[kwarg])
@@ -79,30 +225,52 @@ class LabberFeature(Feature):
         # Deprecated by Simon's changes to Labber API?
         self.config = st.MeasurementObject(self.template_file_path,
                                            self.output_file_path)
-        self.data = {'log': [], 'fit_results': []}
 
-    def __status__(self):
+        self.log_history = LogHistory(conf.config['LABBER_DATA_DIR'],
+                                      os.path.split(self.output_file_path)[-1])
+
+    # If this turns out to be visibly slow, can be replaced with some metaclass
+    # magic
+    def result_methods(self) -> List[callable]:
+        __old_stdout = sys.stdout
+        sys.stdout = open(os.devnull, 'w')
+        methods = [getattr(self, name) for name in dir(self)
+                          if isinstance(getattr(self, name, None), result)]
+        sys.stdout = __old_stdout
+        return methods
+
+    def _status(self) -> str:
+        """Overriding Feature._status, this method returns a formatted report on the
+        easily-representable (i.e. scalar-valued) result methods.
         """
-        Verbose status string should contain recent fit results;
-        or, if there are none, the empty string
-        """
-        def strrep_val(x):
-            return str(x)
+        result_methods = [m.__name__ for m in self.result_methods()]
+        max_method_len = max(map(len, result_methods)) if result_methods else 0
 
         s = ''
-        if not self.data['fit_results']:
-            return s
-
-        last_fit = self.data['fit_results'][-1]
-        max_len = max(map(len, last_fit.keys()))  # longest param name
-        for param in last_fit:
-            s += cstr(param.ljust(max_len, ' '), 'italic') + ' : ' +\
-                 strrep_val(last_fit[param]) + '\n'
+        for m in result_methods:
+            results_history = self.get_results_history(m)
+            val_f = None
+            for i, val in enumerate(results_history):
+                # If the most recent result exists, format it with 'ok' status
+                if val is not None:
+                    status_code = 'ok' if isinstance(val, numbers.Number) else 'warn'
+                    if isinstance(val, numbers.Number):
+                        val_f = cstr('{:+.6e}'.format(val), status_code)
+                    else:
+                        val_f = cstr('Non-numeric result', status_code)
+                    break
+            if val_f is None:
+                val_f = cstr('No result calculated', 'fail')
+            # TODO figure out how nested format strings; then write this with one
+            s += ' ' + cstr(m, 'italic') + ' ' * (max_method_len - len(m))\
+                    + ': {}\n'.format(val_f)
         return s
 
     def __call__(self, initiating_call=None, **kwargs):
         """
         Thinly wrap the Labber API
+
+        TODO: this is really kind of ugly code
         """
         # Handle the keyword arguments by appropriately modifying the config
         # file. This is sort of a stopgap; I'm not really sure it behaves how
@@ -113,64 +281,31 @@ class LabberFeature(Feature):
         # Make RPC to Labber!
         # set the input file.
         self.labber_input_file = self.emit_labber_input_file()
-        self.labber_output_file = self.next_log_name()
+        self.labber_output_file = self.log_history.next_log_path()
         self.config.performMeasurement()
         # Clean up: tempfile no longer needed.
         os.unlink(self.labber_input_file)
 
         # Raw data is now in output_file. Load it into self.data.
+        log_name = os.path.split(self.labber_output_file)[-1]
         log_file = Labber.LogFile(self.labber_output_file)
-        self.data['log'].append({})
-        self.data['log'][-1]['log_name'] = self.last_log_name()
-        self.data['log'][-1]['entries'] = []
-        for i in range(log_file.getNumberOfEntries()):
-            self.data['log'][-1]['entries'].append(log_file.getEntry(i))
 
-    def _log_index(self, log_name: str) -> int:
-        """
-        get the index at the end of a Labber logfile name
-        """
-        try:
-            return int(os.path.splitext(log_name)[0].split('_')[-1])
-        except Exception:  # e.g. no logfile with integral suffix, or no file
-            return 0
+    def all_results(self, index=-1) -> dict:
+        """Returns a dict containing all the result values, even if they haven't been
+        computed before."""
+        d = {}
+        for method in self.result_methods():
+            d[method.__name__] = method(index=index)
+        return d
 
-    def last_log_name(self) -> Optional[str]:
-        """
-        return the base name of the last-incremented log file
-        """
-        (output_dir, output_fn) = os.path.split(self.output_file_path)
+    def get_results_history(self, result_name: str):
+        """Returns a generator containing all the historical values measured for a
+        single result method"""
 
-        log_names = [fn for fn in os.listdir(output_dir)
-                        if fn.startswith(os.path.splitext(output_fn)[0])]
-        if log_names:
-            last_log = max(log_names, key=self._log_index)
-            return os.path.join(output_dir, last_log)
-        else:
-            return None
-
-    def log_name(self, index: Optional[int]=None) -> str:
-        """
-        return a valid log name given a log index.
-        """
-        if index is not None:
-            (base, ext) = self.output_file_path.split('.')
-            return base + '_' + str(index) + '.' + ext
-        return self.log_name(index=0)
-
-    def next_log_name(self) -> str:
-        """
-        get the last log name, increment it, and return a valid log name.
-        If there are no logs, return the name of log 1.
-        """
-        last_log = self.last_log_name()
-        last_index = self._log_index(last_log)
-        if last_index:
-            if last_index >= self.MAX_LOG_INDEX:
-                warn('log index {} exceeds MAX_LOG_INDEX'.format(last_index + 1))
-            return self.log_name(index=last_index + 1)
-        else:
-            return self.log_name(index=1)
+        # use reversed range rather than negative indices to avoid double
+        # counting if new results are added between __next__() calls
+        return (self.results[index].get(result_name)
+                for index in reversed(range(len(self.results))))
 
     def deserialize_template(self):
         """
@@ -214,8 +349,7 @@ class LabberFeature(Feature):
         #self.set_expired(True)
 
     def merge_configs(self):
-        """
-        TODO write a real docstring here
+        """TODO write a real docstring here
         Merge the template and diff configuration dictionaries, in preparation
         for serialization
         """
@@ -224,21 +358,20 @@ class LabberFeature(Feature):
         for diff_key in self.template_diffs:
             vals = self.template_diffs[diff_key]
             channel = [c for c in new_config['step_channels'] if
-                        c['channel_name'] == diff_key]
+                       c['channel_name'] == diff_key]
             channel = [{}] if not channel else channel[0]
             if isinstance(vals, tuple):
                 items = channel['step_items'][0]
                 items['start'] = vals[0]
                 items['stop'] = vals[1]
                 items['n_pts'] = vals[2]
-                items['center'] = (vals[0] + vals[1])/2
+                items['center'] = (vals[0] + vals[1]) / 2
                 items['span'] = vals[1] - vals[0]
-                items['step'] = items['span']/items['n_pts']
+                items['step'] = items['span'] / items['n_pts']
         return new_config
 
     def emit_labber_input_file(self) -> str:
-        """
-        TODO write a real docstring here
+        """TODO write a real docstring here
         Write a temporary .hdf5 input for Labber to consume by attempting to
         combine the template and template_diffs. Under Unix this gets written
         to a tempfile in the enclosing /proc subtree. Windows should use a
@@ -264,8 +397,7 @@ class LabberFeature(Feature):
 
     @property
     def diffs(self):
-        """
-        TODO write a real docstring here
+        """TODO write a real docstring here
         TODO write a real method here
         Pretty-print all the user-specified configuration parameters that
         differ from the template file
@@ -288,12 +420,14 @@ class LabberFeature(Feature):
     def labber_output_file(self, x):
         self.config.sCfgFileOut = x
 
-    def __expired__(self, call_record=None):
+    def _expired(self, call_record=None):
         """
-        Default expiration condition: is there  a result?
+        Default expiration condition: is there a result?
+
+        TODO: introspect in call record history for detailed expiration info.
+        For now, simply checks if there ecists a named output file.
         """
-        return (('fit_results' not in self.data)
-                 or not self.data['fit_results'])
+        return no_recorded_result(self)
 
 
 class LabberCall(CallRecord):
@@ -307,3 +441,5 @@ class LabberCall(CallRecord):
     def __init__(self, feature, *args, **kwargs):
         super().__init__(feature, *args, **kwargs)
         self.log_name = feature.next_log_name()
+
+

@@ -22,11 +22,12 @@ from mongoengine import *
 
 import dysart.messages.messages as messages
 
+
 def refresh(fn):
     """
     Decorator that flags a method as having dependencies and possibly requiring
     a refresh operation. Recursively refreshes ancestors, then checks an
-    additional condition `__expired__()` specified by the Feature class. If the
+    additional condition `_expired()` specified by the Feature class. If the
     feature or its ancestors have expired, perform the corrective operation
     defined by the _______ method.
 
@@ -35,12 +36,10 @@ def refresh(fn):
     dependencies. This situation can be illustrated by a QubitRabi feature with
     public methods `pi_time` and `pi_2_time` accessed as properties:
 
-        @property
         @refresh
         def pi_time(self):
             return self.data['pi_time']
 
-        @property
         @refresh
         def pi_2_time(self):
             return self.data['pi_2_time']
@@ -75,10 +74,10 @@ def refresh(fn):
             for parent_key in feature.parents:
                 # Call parent to refresh recursively; increment stack depth
                 parent_is_stale = feature.parents[parent_key]\
-                                   .touch(initiating_call=this_call, is_stale=0)
+                                  .touch(initiating_call=this_call, is_stale=0)
                 is_stale |= parent_is_stale
         # If stale for some other reason, also flag to be updated.
-        feature_expired = feature.__expired__(call_record=this_call)
+        feature_expired = feature._expired(call_record=this_call)
         is_stale |= feature_expired
         is_stale |= feature.manual_expiration_switch
         # If this line is in a later place, __call__ is called twice. You need
@@ -155,36 +154,31 @@ class Feature(Document):
         super().__init__(**kwargs)
         self.save()
 
-    def __status__(self):
+    def _status(self):
         """
         returns a pretty-printed string containing detailed information about
         the feature's current status; e.g. the details of recently-found
-        fitting parameters.
+        fitting parameters. Should be overridden by derived classes.
         """
         return ''
 
 
     def __str__(self):
-        """
-        human-readable string representation of Feature class. This should be
-        useful for interactive programming and debugging, and to understand the
-        structure of the Feature DAG.
-
-        Should report its name, most-derived (?) type, parents, and names and
+        """should report its name, most-derived (?) type, parents, and names and
         expiration statuses thereof.
         """
         s = ''
         # Initialize as object name with type judgment
-        if self.__expired__() | self.manual_expiration_switch:
+        if self._expired() | self.manual_expiration_switch:
             s = messages.cstr(self.name, 'fail')
         else:
             s = messages.cstr(self.name, 'ok')
         # Descriptor of this feature
-        s +=  '\t: ' + messages.cstr(self.__class__.__name__, 'bold')
+        s += '\t: ' + messages.cstr(self.__class__.__name__, 'bold')
         # This feature's status
-        status = self.__status__()
+        status = self._status()
         if status:
-                s += '\n' + status
+            s += '\n' + status
         if self.parents:
             s += '\n\t'
             for p in self.parents.values():
@@ -193,25 +187,26 @@ class Feature(Document):
 
         return s
 
-    def get_properties(self):
+    def _properties(self):
         """
         TODO real get_properties docstring
         Return a list of all the refresh methods of the feature
         """
         class_dict = self.__class__.__dict__
-        return [p for p in class_dict if hasattr(class_dict[p], 'is_refresh')\
-                        and not p.startswith('_')]  # ignore self._collections
+        return [p for p in class_dict if hasattr(class_dict[p], 'is_refresh') and
+                not p.startswith('_')]  # ignore self._collections
 
     @property
     def properties(self):
         """
         TODO real properties docstring
-        Pretty-print a human-readable description of all the object's property methods
+        Pretty-print a human-readable description of all the object's property
+        methods
         """
         class_dict = self.__class__.__dict__
         print('')
-        for prop in self.get_properties():
-            pprint_func(prop, self.__class__.__dict__[prop].__doc__)
+        for prop in self._properties():
+            messages.pprint_func(prop, self.__class__.__dict__[prop].__doc__)
 
     def __call__(self, initiating_call=None, **kwargs):
         """
@@ -227,7 +222,7 @@ class Feature(Document):
         return
 
     @refresh
-    def touch(self, initiating_call=None, is_stale=False):
+    def touch(self, initiating_call=None, is_stale=False) -> bool:
         """
         Manually refresh the feature without doing anything else. This method
         has a special role, being invoked by DySART as the default refresh
@@ -239,28 +234,24 @@ class Feature(Document):
         """
         return is_stale
 
-    def __expired__(self, call_record=None):
+    def _expired(self, call_record=None) -> bool:
         """
         Check for feature expiration. By default, everything is a twinkie.
         """
 
         return False
 
-    def set_expired(self, *args):
+    def set_expired(self, is_expired: bool = True) -> None:
         """
         Provide an interface to manually set the expiration state of a feature.
         """
-        if not args:
-            is_expired = True
-        else:
-            is_expired = args[0]
         self.manual_expiration_switch = is_expired
         self.save()
 
     def update(self):
         pass
 
-    def is_recursive(self):
+    def is_recursive(self) -> bool:
         """
         Does dependency-checking recurse on this feature? By default, yes.
         Even though this does nothing now, I'm leaving it here to indicate that
@@ -268,7 +259,7 @@ class Feature(Document):
         """
         return True
 
-    def add_parents(self, *new_parents):
+    def add_parents(self, *new_parents) -> bool:
         """
         Insert a dependency into the feature's parents list and write to the
         database. Can pass a single feature, multiple features as
@@ -312,7 +303,7 @@ class CallRecord(Document):
         # self.initiating_call = initiating_call
         self.feature = feature
         self.timestamp = dt.datetime.now()
-        if self.initiating_call == None:
+        if self.initiating_call is None:
             self.level = 0
         else:
             self.level = self.initiating_call.level + 1
@@ -320,7 +311,7 @@ class CallRecord(Document):
         # Generate a uid
         # TODO really this should be a hash of the called feature's state
         h = hashlib.sha1(str.encode(self.feature.name))
-        if self.initiating_call == None:
+        if self.initiating_call is None:
             h.update(str.encode(str(self.timestamp)))
         else:
             h.update(str.encode(self.initiating_call.uid))

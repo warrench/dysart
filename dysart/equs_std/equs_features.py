@@ -8,19 +8,12 @@ from uncertainties.umath import *
 import pint  # Units package
 
 from dysart.feature import *
-from dysart.labber.labber_feature import LabberFeature
+from dysart.labber.labber_feature import LabberFeature, result
 from dysart.equs_std import measurements as meas
 from dysart.equs_std.fitting import spectra, rabi
 from dysart.messages.messages import logged
 
 ureg = pint.UnitRegistry()
-
-
-def no_recorded_result(self, level=0):
-    """
-    Expiration condition: is there a result?
-    """
-    return (('fit_results' not in self.data) or not self.data['fit_results'])
 
 
 class ResonatorSpectrum(LabberFeature):
@@ -63,36 +56,59 @@ class QubitSpectrum(LabberFeature):
         default='Single-Qubit Simulator - Polarization - Z'
     )
 
-    def __call__(self, initiating_call=None):
-        # Make the Labber measurement. Afterward, data is in self.data['log']
-        super().__call__(initiating_call=initiating_call)
 
-        # Fit that data and save the result in fit_results.
-        last_entry = self.data['log'][-1]['entries'][-1]
+    #####
+    # Ok, so here's the problem: fit is a result, but it's either called by
+    # `__call__`, or it's not available to other result methods. Alternatively,
+    # if it's not a result, then it won't be saved in self.results. One way
+    # around this is to make accessing a result by name call the associated
+    # result method.
+    #####
+
+    ####
+    # Note: index semantics are kind of weird, actually. What happens when it
+    # refreshes? You don't get the index you expected, necessarily.
+    #
+    #
+    ####
+
+#     def __call__(self, initiating_call=None):
+#         # Make the Labber measurement. Afterward, data is in self.data['log']
+#         super().__call__(initiating_call=initiating_call)
+#         # Fit that data and save the result in fit_results.
+
+    @result
+    def fit(self, index=-1):
+        """
+        Compute a best fit for the resonance data at this index.
+        """
+
+        # TODO: should this also look like a function call?
+        last_entry = self.log_history[index][-1]
         drive_frequency_data = last_entry[self.drive_frequency_channel]
         polarization_Z_data = last_entry[self.polarization_Z_channel]
         fit = spectra.fit_spectrum(drive_frequency_data, polarization_Z_data, 1)
-        self.data['fit_results'].append(fit.params.valuesdict())
+        return fit.params.valuesdict()
 
-    @refresh
-    def center_freq(self):
+    @result
+    def center_freq(self, index=-1):
         """
         Return the best guess for the resonant frequency of the qubit's 0 <-> 1
         transition
         """
-        last_fit = self.data['fit_results'][-1]
+        last_fit = self.fit(index)
         center = last_fit['_0_center']
         return center
 
-    @refresh
-    def linewidth(self):
+    @result
+    def linewidth(self, index=-1):
         """
         Return the best guess for the HWHM (or more parameters, depending on the
         choice of fitting routine) of the qubit's 0 <-> 1 transition
         """
-        last_fit = self.data['fit_results'][-1]
+        last_fit = self.fit(index)
         fwhm = last_fit['_0_fwhm']
-        return fwhm/2
+        return fwhm / 2
 
 
 class QubitRabi(LabberFeature):
@@ -129,60 +145,69 @@ class QubitRabi(LabberFeature):
         super().__call__(initiating_call=initiating_call,
                          freq_channel=center_freq)
 
-        # Fit that data and save the result in fit_results.
-        last_entry = self.data['log'][-1]['entries'][-1]
+    @result
+    def fit(self, index=-1):
+        """
+        Compute a best fit for Rabi oscillation data at this index.
+        """
+
+        # TODO: log_history should be a member of self, not of self.results.
+        # self.results should be totally hidden.
+
+        # fit results and enter them in self.data
+        last_entry = self.log_history[index][-1]
         plateau_data = last_entry[self.plateau_channel]
         polarization_Z_data = last_entry[self.polarization_Z_channel]
         fit = rabi.fit_rabi(plateau_data, polarization_Z_data)
-        self.data['fit_results'].append(fit.params.valuesdict())
+        return fit.params.valuesdict()
 
-    @refresh
-    def frequency(self):
+    @result
+    def frequency(self, index=-1):
         """
         Return the Rabi frequency at the specified drive amplitude
         """
-        last_fit = self.data['fit_results'][-1]
+        last_fit = self.fit(index)
         return last_fit['freq']
 
-    @refresh
-    def pi_time(self):
+    @result
+    def pi_time(self, index=-1):
         """
         Return the time to perform an X gate at the specified drive amplitude
         """
-        rabi_period = 1/self.frequency()
-        return rabi_period/2
+        rabi_period = 1 / self.frequency(index)
+        return rabi_period / 2
 
-    @refresh
-    def pi_2_time(self):
+    @result
+    def pi_2_time(self, index=-1):
         """
         Return the time to perform an H gate at the specified drive amplitude
         """
-        rabi_period = 1/self.frequency()
-        return rabi_period/4
+        rabi_period = 1 / self.frequency(index)
+        return rabi_period / 4
 
-    @refresh
-    def decay_rate(self):
+    @result
+    def decay_rate(self, index=-1):
         """
         Return the rate at which Rabi oscillations damp out
         """
-        last_fit = self.data['fit_results'][-1]
+        last_fit = self.fit(index)
         return last_fit['decay']
 
-    @refresh
-    def decay_time(self):
+    @result
+    def decay_time(self, index=-1):
         """
         Return the Rabi decay time (or more parameters, depending on choice of
         fitting routine)
         """
-        return 1/self.decay_rate()
+        return 1/self.decay_rate(index)
 
-    @refresh
-    def phase(self):
+    @result
+    def phase(self, index=-1):
         """
         Return the Rabi phase. Note that this can be nonzero, depending on the
         drive pulse shape.
         """
-        last_fit = self.data['fit_results'][-1]
+        last_fit = self.fit(index)
         return last_fit['phase']
 
 
@@ -203,7 +228,7 @@ class QubitRelaxation(LabberFeature):
         super().__call__(self)
         # TODO: other stuff
 
-    @refresh
+    @result
     def time_const(self):
         """
         Return the time for qubit polarization to decay to 1/e of its original
