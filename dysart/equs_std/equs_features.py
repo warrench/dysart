@@ -32,58 +32,24 @@ class QubitSpectrum(LabberFeature):
 
     At the moment, there are a number of ugly hard-coded constants. As soon as
     this _works_, start fixing that first.
-
-    The other incredibly ugly thing is the duplication of the log file: it's
-    written once to the output file location, and once to the mongodb database.
     """
-    call_message = 'measuring qubit spectrum'
+    call_message = 'measuring qubit spectrum...'
     template_file_path = StringField(default=meas.qubit_spec_file)
     output_file_path = StringField(default=meas.qubit_spec_file_out)
 
     # Instrument names: hardcoded for now.
-    pulse_generator = StringField(
-        default='Multi-Qubit Pulse Generator - '
-    )
-    qubit_simulator = StringField(
-        default='Single-Qubit Simulator - '
-    )
+    pulse_generator = StringField(default='Multi-Qubit Pulse Generator - ')
+    qubit_simulator = StringField(default='Single-Qubit Simulator - ')
 
     # Channel names: hardcoded for now.
-    drive_frequency_channel = StringField(
-        default='Single-Qubit Simulator - Drive frequency'
-    )
-    polarization_Z_channel = StringField(
-        default='Single-Qubit Simulator - Polarization - Z'
-    )
-
-
-    #####
-    # Ok, so here's the problem: fit is a result, but it's either called by
-    # `__call__`, or it's not available to other result methods. Alternatively,
-    # if it's not a result, then it won't be saved in self.results. One way
-    # around this is to make accessing a result by name call the associated
-    # result method.
-    #####
-
-    ####
-    # Note: index semantics are kind of weird, actually. What happens when it
-    # refreshes? You don't get the index you expected, necessarily.
-    #
-    #
-    ####
-
-#     def __call__(self, initiating_call=None):
-#         # Make the Labber measurement. Afterward, data is in self.data['log']
-#         super().__call__(initiating_call=initiating_call)
-#         # Fit that data and save the result in fit_results.
+    drive_frequency_channel = StringField(default='Single-Qubit Simulator - Drive frequency')
+    polarization_Z_channel = StringField(default='Single-Qubit Simulator - Polarization - Z')
 
     @result
     def fit(self, index=-1):
         """
         Compute a best fit for the resonance data at this index.
         """
-
-        # TODO: should this also look like a function call?
         last_entry = self.log_history[index][-1]
         drive_frequency_data = last_entry[self.drive_frequency_channel]
         polarization_Z_data = last_entry[self.polarization_Z_channel]

@@ -227,3 +227,33 @@ def configure_logging(logfile=''):
     date_format = '%m/%d/%Y %I:%M:%S'
     logging.basicConfig(format=log_format, filename=logfile,
                         datefmt=date_format, level='INFO')
+
+
+def tree(obj, get_deps: callable, pipe='│', dash='─', tee='├',
+         elbow='└', indent=' ' * 3, prefix='') -> str:
+    """Takes an object and a closure that is assumed to return an iterable of
+    dependent objects of the same type; produces an ascii tree diagram.
+    """
+    s = str(obj)
+    deps = list(get_deps(obj))
+
+    # special case for empty dependents: no pipes
+    if not deps:
+        ('\n' + prefix).join(s.split('\n'))
+        return s
+
+    # otherwise, dependents are nonempty: pipe to them
+    s = (prefix + '\n' + pipe).join(s.split('\n'))
+    s += '\n'
+
+    for i, dep in enumerate(deps):
+            if i == len(deps) - 1:
+                leader = elbow + dash * len(indent)
+            else:
+                leader = tee + dash * len(indent)
+
+            s += prefix + leader
+            new_prefix = pipe + indent if i != len(deps) - 1 else ' ' + indent
+            subtree = tree(dep, get_deps, prefix=new_prefix)
+            s += ('\n' + new_prefix).join(subtree.split('\n'))
+    return s

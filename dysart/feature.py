@@ -16,6 +16,7 @@ from enum import Enum
 from functools import wraps
 import hashlib
 import getpass
+import socket
 import time
 
 from mongoengine import *
@@ -154,7 +155,7 @@ class Feature(Document):
         super().__init__(**kwargs)
         self.save()
 
-    def _status(self):
+    def _status(self) -> str:
         """
         returns a pretty-printed string containing detailed information about
         the feature's current status; e.g. the details of recently-found
@@ -169,7 +170,7 @@ class Feature(Document):
         """
         s = ''
         # Initialize as object name with type judgment
-        if self._expired() | self.manual_expiration_switch:
+        if self._expired():
             s = messages.cstr(self.name, 'fail')
         else:
             s = messages.cstr(self.name, 'ok')
@@ -179,13 +180,14 @@ class Feature(Document):
         status = self._status()
         if status:
             s += '\n' + status
-        if self.parents:
-            s += '\n\t'
-            for p in self.parents.values():
-                parent_str = p.__str__()
-                s += '\n\t'.join(parent_str.split('\n'))
 
         return s
+
+    def tree(self) -> None:
+        """Draw to the terminal a pretty-printed tree of all this Feature's
+        dependents.
+        """
+        print(messages.tree(self, lambda obj: obj.parents.values()))
 
     def _properties(self):
         """
@@ -239,7 +241,7 @@ class Feature(Document):
         Check for feature expiration. By default, everything is a twinkie.
         """
 
-        return False
+        return self.manual_expiration_switch
 
     def set_expired(self, is_expired: bool = True) -> None:
         """
@@ -281,8 +283,8 @@ class Feature(Document):
 
 
 class CallRecord(Document):
-    """
-    TODO CallRecord docstring
+    """A log of a call issued to a feature, containing issuance time, caller
+    identity, and other possibly-useful diagnostic information.
 
     Uniquely identified (with high probability) by a 40-character hexadecimal
     string.
@@ -296,6 +298,7 @@ class CallRecord(Document):
     uid = StringField(default='', max_length=uid_len, required=True, primary_key=True)
     timestamp = DateTimeField(default=dt.datetime.now())
     user_id = StringField(max_length=255)
+    hostname = StringField(max_length=255)
     exit_status = StringField(default='OK')
 
     def __init__(self, feature, *args, **kwargs):
@@ -303,24 +306,32 @@ class CallRecord(Document):
         # self.initiating_call = initiating_call
         self.feature = feature
         self.timestamp = dt.datetime.now()
+        self.user_id = getpass.getuser()
+        self.hostname = socket.gethostname()
         if self.initiating_call is None:
             self.level = 0
         else:
             self.level = self.initiating_call.level + 1
 
         # Generate a uid
-        # TODO really this should be a hash of the called feature's state
+        # TODO should be a hash of the called feature's state?
         h = hashlib.sha1(str.encode(self.feature.name))
-        if self.initiating_call is None:
-            h.update(str.encode(str(self.timestamp)))
-        else:
+        h.update(str.encode(str(self.timestamp)))
+        if self.initiating_call is not None:
             h.update(str.encode(self.initiating_call.uid))
         self.uid = h.hexdigest()[:CallRecord.uid_len]
-
-        self.user_id = getpass.getuser()
 
         self.save()
 
     def get_initiated_call(self, other_feature):
         # Should search tree for a matching call.
         return
+
+    def root_call(self) -> 'CallRecord':
+        """Get the ultimate root of the call tree--this should be input from a user,
+        cron daemon or similar.
+        """
+        if self.initiating_call == None:
+            return self
+        else:
+            return self.initiating_call.root_call()

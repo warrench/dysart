@@ -263,7 +263,7 @@ class LabberFeature(Feature):
                 val_f = cstr('No result calculated', 'fail')
             # TODO figure out how nested format strings; then write this with one
             s += ' ' + cstr(m, 'italic') + ' ' * (max_method_len - len(m))\
-                    + ': {}\n'.format(val_f)
+                    + ' : {}\n'.format(val_f)
         return s
 
     def __call__(self, initiating_call=None, **kwargs):
@@ -427,7 +427,7 @@ class LabberFeature(Feature):
         TODO: introspect in call record history for detailed expiration info.
         For now, simply checks if there ecists a named output file.
         """
-        return no_recorded_result(self)
+        return no_recorded_result(self) or self.manual_expiration_switch
 
 
 class LabberCall(CallRecord):

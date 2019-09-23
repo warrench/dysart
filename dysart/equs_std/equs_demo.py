@@ -18,9 +18,9 @@ qb_spec = include_feature(QubitSpectrum, 'qb_spec')
 # Then the Rabi. Make sure it depends on the transition frequency measured by qb_spec!
 qb_rabi = include_feature(QubitRabi, 'qb_rabi')
 qb_rabi.parents['spec'] = qb_spec
-print('done.\n')
+cprint('done.\n', 'ok')
 
-print(qb_rabi)
+qb_rabi.tree()
 
 # Then the T1
 #qb_relax = include_feature(QubitRelaxation, 'qb_relax')

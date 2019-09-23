@@ -21,6 +21,7 @@ def run_command(services) -> int:
     d_table = {
         'on': util.start,
         'off': util.stop,
+        # 'set': util.set_var,
         'status': util.status,
         'restart': nothing,
         'help': nothing,
@@ -28,7 +29,7 @@ def run_command(services) -> int:
         'log': nothing,
         'clean': nothing,
         'uninstall': nothing,
-        'proj': nothing,
+        # 'proj': nothing,
         'python': util.dypy_session,  # set up services in interactive session
     }
     command_fun = d_table.get(args.command)
