@@ -23,6 +23,7 @@ from mongoengine import *
 
 import dysart.messages.messages as messages
 
+CALLRECORD_UID_LEN = 40
 
 def refresh(fn):
     """
@@ -66,7 +67,7 @@ def refresh(fn):
         else:
             initiating_call = None
         # And create the new call record.
-        this_call = CallRecord(feature, initiating_call=initiating_call)
+        this_call = CallRecord(feature=feature, initiating_call=initiating_call)
 
         # is_stale tracks whether we need to update this node
         is_stale = False
@@ -210,6 +211,17 @@ class Feature(Document):
         for prop in self._properties():
             messages.pprint_func(prop, self.__class__.__dict__[prop].__doc__)
 
+    def _call_logs(self) -> list:
+        """Return a list of CallRecords associated with this Feature
+        """
+        return CallRecord.objects(feature=self)
+
+    def call_logs(self) -> list:
+        """Pretty-print a list of CallRecords associated with this Feature
+        """
+        for log in self._call_logs():
+            print(log)
+
     def __call__(self, initiating_call=None, **kwargs):
         """
         Feature is callable. This method does whatever is needed to update an
@@ -283,49 +295,68 @@ class Feature(Document):
 
 
 class CallRecord(Document):
-    """A log of a call issued to a feature, containing issuance time, caller
-    identity, and other possibly-useful diagnostic information.
+    """
+    TODO CallRecord docstring
 
     Uniquely identified (with high probability) by a 40-character hexadecimal
     string.
     """
-    uid_len = 40
 
     meta = {'allow_inheritance': True}
-    initiating_call = ReferenceField('self', required=False)
-    level = IntField(default=0)
-    feature = ReferenceField('Feature')
-    uid = StringField(default='', max_length=uid_len, required=True, primary_key=True)
-    timestamp = DateTimeField(default=dt.datetime.now())
-    user_id = StringField(max_length=255)
-    hostname = StringField(max_length=255)
-    exit_status = StringField(default='OK')
 
-    def __init__(self, feature, *args, **kwargs):
+    # Exit codes
+    DONE = 'done'
+    FAILED = 'failed'
+    WARNING = 'warning'
+
+    initiating_call = ReferenceField('self', null=True)
+    level = IntField(default=0)
+    feature = ReferenceField(Feature, required=True)
+    uid = StringField(default='', max_length=CALLRECORD_UID_LEN, required=True, primary_key=True)
+    timestamp = DateTimeField(default=dt.datetime.now())
+    user = StringField(max_length=255)
+    hostname = StringField(max_length=255)
+    exit_status = StringField(max_length=40)
+
+    def __init__(self, *args, **kwargs):
+        """To create a CallRecord, should receive `feature` and `initiating_call`
+        args
+        """
         super().__init__(*args, **kwargs)
-        # self.initiating_call = initiating_call
-        self.feature = feature
         self.timestamp = dt.datetime.now()
-        self.user_id = getpass.getuser()
+        self.user =  getpass.getuser()
         self.hostname = socket.gethostname()
-        if self.initiating_call is None:
-            self.level = 0
-        else:
-            self.level = self.initiating_call.level + 1
+        if not self.level:
+            if not self.initiating_call:
+                self.level = 0
+            else:
+                self.level = kwargs['initiating_call'].level + 1
 
         # Generate a uid
-        # TODO should be a hash of the called feature's state?
-        h = hashlib.sha1(str.encode(self.feature.name))
-        h.update(str.encode(str(self.timestamp)))
-        if self.initiating_call is not None:
-            h.update(str.encode(self.initiating_call.uid))
-        self.uid = h.hexdigest()[:CallRecord.uid_len]
+        # TODO really this should be a hash of the called feature's state
+        h = hashlib.sha1(self.feature.name.encode('utf-8'))
+        h.update(str(self.timestamp).encode('utf-8'))
+        if self.initiating_call:
+            h.update(self.initiating_call.uid.encode('utf-8'))
+        self.uid = h.hexdigest()[:CALLRECORD_UID_LEN]
 
         self.save()
 
+    def __str__(self):
+        s = self.uid[:16] + '...\n'
+        included_attrs = ['feature', 'timestamp', 'user', 'hostname', 'exit_status']
+        for attr in included_attrs:
+            max_attr_len = max(map(len, included_attrs))
+            val = getattr(self, attr)
+            if isinstance(val, Feature):
+                val = val.name
+            s += ' ' + messages.cstr(attr, 'italic') + ' ' * (max_attr_len - len(attr))\
+                    + ' : {}\n'.format(val)
+        return s
+
     def get_initiated_call(self, other_feature):
         # Should search tree for a matching call.
-        return
+        return None
 
     def root_call(self) -> 'CallRecord':
         """Get the ultimate root of the call tree--this should be input from a user,
@@ -335,3 +366,18 @@ class CallRecord(Document):
             return self
         else:
             return self.initiating_call.root_call()
+
+
+def get_records_by_uid_pre(uid_pre):
+    """Takes a uid prefix and searches for a record whose uid contains this
+    substring.
+    """
+    matches = CallRecord.objects(uid__istartswith=uid_pre)
+    return matches
+
+def get_records_by_uid_sub(uid_sub):
+    """Takes a uid /sub/string and searches for a record whose uid contains this
+    substring.
+    """
+    matches = CallRecord.objects(uid__icontains=uid_sub)
+    return matches

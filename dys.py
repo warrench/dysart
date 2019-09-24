@@ -1,3 +1,5 @@
+#! /bin/python
+
 """
 Author: mcncm, 2019
 DySART toplevel administration script

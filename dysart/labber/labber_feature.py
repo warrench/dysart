@@ -26,7 +26,7 @@ from dysart.labber.labber_serialize import load_labber_scenario_as_dict
 from dysart.labber.labber_serialize import save_labber_scenario_from_dict
 from dysart.labber.labber_util import no_recorded_result
 from dysart.feature import Feature, CallRecord, refresh
-from dysart.messages.messages import cstr
+import dysart.messages.messages as messages
 import toplevel.conf as conf
 
 # Set path to executable. This should be done not-here, but it needs to be put
@@ -93,7 +93,8 @@ class result:
 
         wrapped_fn.is_result = True
         self.wrapped_fn = refresh(wrapped_fn)
-        self.__name__ = wrapped_fn.__name__
+        self.__name__ = wrapped_fn.__name__  # TODO: using `wraps` right?
+        self.__doc__ = wrapped_fn.__doc__
 
     def __get__(self, obj, objtype):
         """Hack to bind this callable to the parent object.
@@ -231,7 +232,9 @@ class LabberFeature(Feature):
 
     # If this turns out to be visibly slow, can be replaced with some metaclass
     # magic
-    def result_methods(self) -> List[callable]:
+    def _result_methods(self) -> List[callable]:
+        """Gets a list of all the methods of this class annotated with @result
+        """
         __old_stdout = sys.stdout
         sys.stdout = open(os.devnull, 'w')
         methods = [getattr(self, name) for name in dir(self)
@@ -239,11 +242,21 @@ class LabberFeature(Feature):
         sys.stdout = __old_stdout
         return methods
 
+    def result_methods(self) -> None:
+        """Pretty-prints a list of all the methods of this class annotated with
+        @result
+        """
+        class_dict = self.__class__.__dict__
+        print('')
+        for m in self._result_methods():
+            messages.pprint_func(m.__name__, m.__doc__)
+            # messages.pprint_func(prop, self.__class__.__dict__[prop].__doc__)
+
     def _status(self) -> str:
         """Overriding Feature._status, this method returns a formatted report on the
         easily-representable (i.e. scalar-valued) result methods.
         """
-        result_methods = [m.__name__ for m in self.result_methods()]
+        result_methods = [m.__name__ for m in self._result_methods()]
         max_method_len = max(map(len, result_methods)) if result_methods else 0
 
         s = ''
@@ -255,14 +268,14 @@ class LabberFeature(Feature):
                 if val is not None:
                     status_code = 'ok' if isinstance(val, numbers.Number) else 'warn'
                     if isinstance(val, numbers.Number):
-                        val_f = cstr('{:+.6e}'.format(val), status_code)
+                        val_f = messages.cstr('{:+.6e}'.format(val), status_code)
                     else:
-                        val_f = cstr('Non-numeric result', status_code)
+                        val_f = messages.cstr('Non-numeric result', status_code)
                     break
             if val_f is None:
-                val_f = cstr('No result calculated', 'fail')
+                val_f = messages.cstr('No result calculated', 'fail')
             # TODO figure out how nested format strings; then write this with one
-            s += ' ' + cstr(m, 'italic') + ' ' * (max_method_len - len(m))\
+            s += ' ' + messages.cstr(m, 'italic') + ' ' * (max_method_len - len(m))\
                     + ' : {}\n'.format(val_f)
         return s
 
@@ -294,7 +307,7 @@ class LabberFeature(Feature):
         """Returns a dict containing all the result values, even if they haven't been
         computed before."""
         d = {}
-        for method in self.result_methods():
+        for method in self._result_methods():
             d[method.__name__] = method(index=index)
         return d
 
