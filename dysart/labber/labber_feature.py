@@ -118,7 +118,8 @@ class LogHistory:
 
     """
 
-    def __init__(self, labber_data_dir: str, log_name_template: str):
+    def __init__(self, feature_name: str, labber_data_dir: str, log_name_template: str):
+        self.feature_name = feature_name
         self.labber_data_dir = labber_data_dir
         self.log_name_template = log_name_template
         self.log_cache = {}  # contains logs that are held in memory
@@ -167,7 +168,8 @@ class LogHistory:
 
     def log_name(self, index: int) -> str:
         """Gets the log name associated with an index"""
-        return f'_{index}'.join(os.path.splitext(self.log_name_template))
+        return f'_{self.feature_name}_{index}'.join(
+            os.path.splitext(self.log_name_template))
 
     def log_path(self, index: int) -> str:
         """Gets the log path associated with an index"""
@@ -177,7 +179,9 @@ class LogHistory:
         """Gets the index of a filename if it is an output log name, or None if
         it is not."""
         root, ext = os.path.splitext(self.log_name_template)
-        m = re.search('^' + root + '_(\d+)' + ext + '$', file_name)
+        # pattern = '^' + root + '_' + self.feature_name + '_(\d+)' + ext + '$'
+        pattern = f'^{root}_{self.feature_name}_(\\d+){ext}$'
+        m = re.search(pattern, file_name)
         return int(m.groups()[0]) if m else None
 
     def is_log(self, file_name: str) -> bool:
@@ -227,7 +231,8 @@ class LabberFeature(Feature):
         self.config = st.MeasurementObject(self.template_file_path,
                                            self.output_file_path)
 
-        self.log_history = LogHistory(conf.config['LABBER_DATA_DIR'],
+        self.log_history = LogHistory(self.name,
+                                      conf.config['LABBER_DATA_DIR'],
                                       os.path.split(self.output_file_path)[-1])
 
     # If this turns out to be visibly slow, can be replaced with some metaclass

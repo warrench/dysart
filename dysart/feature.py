@@ -1,5 +1,5 @@
 """
-Top-level dysart feature class. Defines dependency-solving behavior at a high
+Top-level DySART feature class. Defines dependency-solving behavior at a high
 level of abstraction, deferring implementation of update conditions to user-
 defined subclasses.
 
@@ -26,8 +26,7 @@ import dysart.messages.messages as messages
 CALLRECORD_UID_LEN = 40
 
 def refresh(fn):
-    """
-    Decorator that flags a method as having dependencies and possibly requiring
+    """Decorator that flags a method as having dependencies and possibly requiring
     a refresh operation. Recursively refreshes ancestors, then checks an
     additional condition `_expired()` specified by the Feature class. If the
     feature or its ancestors have expired, perform the corrective operation
@@ -52,22 +51,33 @@ def refresh(fn):
 
     This is a pretty central feature, and it must be done right. This should be
     a focus of any future code review, so
+
     """
     @wraps(fn)
     def wrapped_fn(*args, **kwargs):
         """
         The modified function passed to refresh.
         """
+
         feature = args[0]
 
         # Generate new call record from initiating call record
         # Ensure that initiating_call is defined
         if 'initiating_call' in kwargs:
             initiating_call = kwargs['initiating_call']
+            stack_level = initiating_call.stack_level + 1
         else:
             initiating_call = None
+            stack_level = 0
+
         # And create the new call record.
-        this_call = CallRecord(feature=feature, initiating_call=initiating_call)
+        this_call = CallRecord(feature=feature,
+                               method=fn.__name__,
+                               initiating_call=initiating_call,
+                               stack_level=stack_level,
+                               start_time=dt.datetime.now(),
+                               user=getpass.getuser(),
+                               hostname=socket.gethostname())
 
         # is_stale tracks whether we need to update this node
         is_stale = False
@@ -79,7 +89,7 @@ def refresh(fn):
                                   .touch(initiating_call=this_call, is_stale=0)
                 is_stale |= parent_is_stale
         # If stale for some other reason, also flag to be updated.
-        feature_expired = feature._expired(call_record=this_call)
+        feature_expired = feature._expired(call_record=None)
         is_stale |= feature_expired
         is_stale |= feature.manual_expiration_switch
         # If this line is in a later place, __call__ is called twice. You need
@@ -93,41 +103,36 @@ def refresh(fn):
         # If that method is removed, consider getting rid of this snippet, too.
         if 'is_stale' in kwargs:
             kwargs['is_stale'] = is_stale
+
         # Call the requested function!
-        return_value = fn(*args, **kwargs)
+        try:
+            return_value = fn(*args, **kwargs)
+        except e:
+            this_call.exit_status = '{}: {}'.format(CallRecord.FAILED, e)
+        else:
+            this_call.exit_status = CallRecord.DONE
+        finally:
+            this_call.stop_time = dt.datetime.now()
+
         # Save any changes to the database
         # feature.manual_expiration_switch = False
         feature.save()
-        # Finally, pass along return value of fn: this wrapper should be purely
-        # impure
+        this_call.save()
+
+        """
+        self.user =  getpass.getuser()
+        self.hostname = socket.gethostname()
+        if not self.level:
+            if not self.initiating_call:
+                self.level = 0
+            else:
+                self.level = kwargs['initiating_call'].level + 1
+        """
+
+        # Finally, pass along return value of fn
         return return_value
     wrapped_fn.is_refresh = True
     return wrapped_fn
-
-
-def include_feature(feature_class, query_name):
-    """
-    Either return an existing document, if one exists, or create a new one and
-    return it.
-
-    Note that this kind of function is deemed unsafe by the mongoengine docs,
-    since MongoDB lacks transactions. This might be an important design
-    consideration, so keep an eye on this.
-
-    Note that the equivalent deprecated moongoengine function is called
-    `get_or_create`.
-
-    Note, further, that it maybe considered poor practice to rely on an
-    exception as an ordinary application logic signal.
-    """
-    try:
-        doc = feature_class.objects.get(name=query_name)
-    except DoesNotExist:
-        doc = feature_class(name=query_name)
-    except MultipleObjectsReturned:
-        # Don't do anything yet; just propagate the exception
-        raise MultipleObjectsReturned
-    return doc
 
 
 class Feature(Document):
@@ -145,8 +150,6 @@ class Feature(Document):
     # Hence "data" as a dict blob.
     name = StringField(default='', required=True, primary_key=True)
     manual_expiration_switch = BooleanField(default=False)
-    # Time when last updated
-    timestamp = DateTimeField(default=dt.datetime.now())
     is_stale_func = StringField(max_length=60)
     refresh_func = StringField(max_length=60)
     parents = DictField(default={})
@@ -211,53 +214,47 @@ class Feature(Document):
         for prop in self._properties():
             messages.pprint_func(prop, self.__class__.__dict__[prop].__doc__)
 
-    def _call_logs(self) -> list:
+    def _call_records(self) -> list:
         """Return a list of CallRecords associated with this Feature
         """
         return CallRecord.objects(feature=self)
 
-    def call_logs(self) -> list:
+    def call_records(self) -> list:
         """Pretty-print a list of CallRecords associated with this Feature
         """
-        for log in self._call_logs():
-            print(log)
+        for record in self._call_records():
+            print(record)
 
     def __call__(self, initiating_call=None, **kwargs):
-        """
-        Feature is callable. This method does whatever is needed to update an
-        expired feature.
-        By default, calling the instance only refreshes
-        and logs. Unless overwritten, just updates the time-since-refresh and
+        """Feature is callable. This method does whatever is needed to update an
+        expired feature. By default, calling the instance only refreshes and
+        logs. Unless overwritten, just updates the time-since-refresh and
         returns itself. This strikes me as a convenient expressionn of intent
         in some ways, but it's also a little unpythonic: "explicit is better
         than implicit".
+
         """
-        self.timestamp = dt.datetime.now()
         return
 
     @refresh
     def touch(self, initiating_call=None, is_stale=False) -> bool:
-        """
-        Manually refresh the feature without doing anything else. This method
-        has a special role, being invoked by DySART as the default refresh
-        method called as it climbs the feature tree. It's also treated in a
-        special way by @refresh, in order to propagate refresh data downstream.
-        While this does work, it's a little bit unpythonic: "explicit is better
-        than implicit".
-        In short, this is a hack, and it shouldn't last.
+        """Manually refresh the feature without doing anything else. This method has a
+        special role, being invoked by DySART as the default refresh method
+        called as it climbs the feature tree. It's also treated in a special
+        way by @refresh, in order to propagate refresh data downstream. While
+        this does work, it's a little bit unpythonic: "explicit is better than
+        implicit". In short, this is a hack, and it shouldn't last.
         """
         return is_stale
 
     def _expired(self, call_record=None) -> bool:
-        """
-        Check for feature expiration. By default, everything is a twinkie.
+        """Check for feature expiration. By default, everything is a twinkie.
         """
 
         return self.manual_expiration_switch
 
     def set_expired(self, is_expired: bool = True) -> None:
-        """
-        Provide an interface to manually set the expiration state of a feature.
+        """Provide an interface to manually set the expiration state of a feature.
         """
         self.manual_expiration_switch = is_expired
         self.save()
@@ -266,16 +263,14 @@ class Feature(Document):
         pass
 
     def is_recursive(self) -> bool:
-        """
-        Does dependency-checking recurse on this feature? By default, yes.
+        """Does dependency-checking recurse on this feature? By default, yes.
         Even though this does nothing now, I'm leaving it here to indicate that
         a feature might take its place in the future.
         """
         return True
 
     def add_parents(self, *new_parents) -> bool:
-        """
-        Insert a dependency into the feature's parents list and write to the
+        """Insert a dependency into the feature's parents list and write to the
         database. Can pass a single feature, multiple features as
         comma-separated parameters, a list of features, a list of list of
         features, and so on.
@@ -305,37 +300,40 @@ class CallRecord(Document):
     meta = {'allow_inheritance': True}
 
     # Exit codes
-    DONE = 'done'
-    FAILED = 'failed'
-    WARNING = 'warning'
+    DONE = 'DONE'
+    FAILED = 'FAILED'
+    WARNING = 'WARNING'
+
+    # Which attributes are included in self.__str__()?
+    printed_attrs = ['feature',
+                     'method',
+                     'start_time',
+                     'stop_time',
+                     'user',
+                     'hostname',
+                     'exit_status']
 
     initiating_call = ReferenceField('self', null=True)
-    level = IntField(default=0)
+    stack_level = IntField(default=0)
     feature = ReferenceField(Feature, required=True)
+    method = StringField(max_length=80)
     uid = StringField(default='', max_length=CALLRECORD_UID_LEN, required=True, primary_key=True)
-    timestamp = DateTimeField(default=dt.datetime.now())
+    start_time = DateTimeField()
+    stop_time = DateTimeField()
     user = StringField(max_length=255)
     hostname = StringField(max_length=255)
-    exit_status = StringField(max_length=40)
+    exit_status = StringField(max_length=40, default='DONE')
 
     def __init__(self, *args, **kwargs):
         """To create a CallRecord, should receive `feature` and `initiating_call`
         args
         """
         super().__init__(*args, **kwargs)
-        self.timestamp = dt.datetime.now()
-        self.user =  getpass.getuser()
-        self.hostname = socket.gethostname()
-        if not self.level:
-            if not self.initiating_call:
-                self.level = 0
-            else:
-                self.level = kwargs['initiating_call'].level + 1
 
         # Generate a uid
-        # TODO really this should be a hash of the called feature's state
+        # TODO maybe this should be a hash of the called feature's state
         h = hashlib.sha1(self.feature.name.encode('utf-8'))
-        h.update(str(self.timestamp).encode('utf-8'))
+        h.update(str(self.start_time).encode('utf-8'))
         if self.initiating_call:
             h.update(self.initiating_call.uid.encode('utf-8'))
         self.uid = h.hexdigest()[:CALLRECORD_UID_LEN]
@@ -344,9 +342,8 @@ class CallRecord(Document):
 
     def __str__(self):
         s = self.uid[:16] + '...\n'
-        included_attrs = ['feature', 'timestamp', 'user', 'hostname', 'exit_status']
-        for attr in included_attrs:
-            max_attr_len = max(map(len, included_attrs))
+        for attr in CallRecord.printed_attrs:
+            max_attr_len = max(map(len, CallRecord.printed_attrs))
             val = getattr(self, attr)
             if isinstance(val, Feature):
                 val = val.name

@@ -24,16 +24,24 @@ import Labber
 
 from toplevel.conf import dys_path, config
 from toplevel.util import start, stop, restart, status
-from dysart.feature import CallRecord
+from dysart.feature import CallRecord, get_records_by_uid_pre
 from dysart.services.dyserver import Dyserver
 from dysart.services.database import Database
 import dysart.messages.messages as messages
+
+
+# Prompt
+WELCOME_MESSAGE = """
+Welcome to DyPy!
+Please run `dypy_help()` to learn about this shell\'s builtins.
+"""
 
 # Auto-documentation assistance
 __HELP_FUNCTIONS = []
 def _dypy_help(fn):
     __HELP_FUNCTIONS.append(fn)
     return fn
+
 
 # DyPy builtins
 
@@ -75,13 +83,13 @@ def record(uid_pre: str) -> CallRecord:
 
     matches = get_records_by_uid_pre(uid_pre)
     if len(matches) > 1:
-        raise MultipleObjectsReturned
+        raise me.MultipleObjectsReturned
     elif not matches:
-        raise DoesNotExist
+        raise me.DoesNotExist
     return matches[0]
 
 @_dypy_help
-def feature_tree_setup():
+def feature_dag_setup():
     """Set up a default feature tree, e.g. specified by the DySART config file.
     Retrieves the project specified by config variable `DEFAULT_PROJ`
     """
@@ -106,13 +114,47 @@ def feature_tree_setup():
         print(str(e))
         print("could not import feature tree.")
 
+
+@_dypy_help
+def include_feature(feature_class: type, feature_name: str):
+    """Either return an existing document, if one exists, or create a new one and
+    return it.
+
+    Note that this kind of function is deemed unsafe by the mongoengine docs,
+    since MongoDB lacks transactions. This might be an important design
+    consideration, so keep an eye on this.
+
+    The equivalent deprecated moongoengine function is called
+    `get_or_create`.
+
+    Args:
+        feature_class (type): The class of the feature to be included.
+        feature_name (str): The name of the feature to be included.
+
+    Returns:
+        Feature of type feature_class.
+
+    Raises:
+        MultipleObjectsReturned: if multiple matching objects are found
+        DoesNotExist: if the feature is not found
+    """
+
+    try:
+        doc = feature_class.objects.get(name=feature_name)
+    except me.DoesNotExist:
+        doc = feature_class(name=feature_name)
+    except me.MultipleObjectsReturned:
+        # Don't do anything yet; just propagate the exception
+        raise MultipleObjectsReturned
+    return doc
+
+
 if __name__ == '__main__':
-    messages.cprint('Welcome to DyPy!', status='bold')
-    messages.cprint('Please run `dypy_help()` to learn about this shell\'s builtins.', status='bold')
+    messages.cprint(WELCOME_MESSAGE, status='bold')
     # this is really pretty dangerous!
     services = [Database(), Dyserver()]
     db_server = Database()
     dyserver = Dyserver()
     start(db_server, dyserver)
     messages.configure_logging(logfile=dyserver.logfile)  # should all be managed by server
-    feature_tree_setup()
+    feature_dag_setup()

@@ -3,7 +3,7 @@
 
 from dysart.equs_std.equs_features import QubitSpectrum, QubitRabi
 from dysart.messages.messages import cprint, StatusMessage
-from dysart.feature import include_feature
+from dypy import include_feature
 
 ##############################################
 # Set up the features to do a T1 measurement #
