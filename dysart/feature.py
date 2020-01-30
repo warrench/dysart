@@ -14,9 +14,10 @@ without having to think about _anything_ more than the highest leayer of
 import datetime as dt
 from enum import Enum
 from functools import wraps
-import hashlib
 import getpass
+import hashlib
 import socket
+import sys
 import time
 
 from mongoengine import *
@@ -71,63 +72,46 @@ def refresh(fn):
             stack_level = 0
 
         # And create the new call record.
-        this_call = CallRecord(feature=feature,
-                               method=fn.__name__,
-                               initiating_call=initiating_call,
-                               stack_level=stack_level,
-                               start_time=dt.datetime.now(),
-                               user=getpass.getuser(),
-                               hostname=socket.gethostname())
+        with CallRecord(feature=feature,
+                        method=fn.__name__,
+                        initiating_call=initiating_call,
+                        stack_level=stack_level,
+                        user=getpass.getuser(),
+                        hostname=socket.gethostname()) as record:
 
-        # is_stale tracks whether we need to update this node
-        is_stale = False
-        # if this call recurses, recurse on ancestors.
-        if feature.is_recursive():
-            for parent_key in feature.parents:
-                # Call parent to refresh recursively; increment stack depth
-                parent_is_stale = feature.parents[parent_key]\
-                                  .touch(initiating_call=this_call, is_stale=0)
-                is_stale |= parent_is_stale
-        # If stale for some other reason, also flag to be updated.
-        feature_expired = feature._expired(call_record=None)
-        is_stale |= feature_expired
-        is_stale |= feature.manual_expiration_switch
-        # If this line is in a later place, __call__ is called twice. You need
-        # to understand why.
-        feature.manual_expiration_switch = False
-        # Call the update-self method, the reason for this wrapper's existence
-        if is_stale:
-            feature(initiating_call=initiating_call)
-        # Update staleness parameter in case it was passed in with the function
-        # TODO: this currently only exists for the benefit of Feature.touch().
-        # If that method is removed, consider getting rid of this snippet, too.
-        if 'is_stale' in kwargs:
-            kwargs['is_stale'] = is_stale
 
-        # Call the requested function!
-        try:
+            # is_stale tracks whether we need to update this node
+            is_stale = False
+            # if this call recurses, recurse on ancestors.
+            if feature.is_recursive():
+                for parent_key in feature.parents:
+                    # Call parent to refresh recursively; increment stack depth
+                    parent_is_stale = feature.parents[parent_key]\
+                                    .touch(initiating_call=record, is_stale=0)
+                    is_stale |= parent_is_stale
+            # If stale for some other reason, also flag to be updated.
+            feature_expired = feature._expired(call_record=None)
+            is_stale |= feature_expired
+            is_stale |= feature.manual_expiration_switch
+            # If this line is in a later place, __call__ is called twice. You need
+            # to understand why.
+            feature.manual_expiration_switch = False
+            # Call the update-self method, the reason for this wrapper's existence
+            if is_stale:
+                feature(initiating_call=initiating_call)
+            # Update staleness parameter in case it was passed in with the function
+            # TODO: this currently only exists for the benefit of Feature.touch().
+            # If that method is removed, consider getting rid of this snippet, too.
+            if 'is_stale' in kwargs:
+                kwargs['is_stale'] = is_stale
+
+            # Call the requested function!
             return_value = fn(*args, **kwargs)
-        except e:
-            this_call.exit_status = '{}: {}'.format(CallRecord.FAILED, e)
-        else:
-            this_call.exit_status = CallRecord.DONE
-        finally:
-            this_call.stop_time = dt.datetime.now()
+            # Save any changes to the database
+            # feature.manual_expiration_switch = False
+            feature.save()
 
-        # Save any changes to the database
-        # feature.manual_expiration_switch = False
-        feature.save()
-        this_call.save()
-
-        """
-        self.user =  getpass.getuser()
-        self.hostname = socket.gethostname()
-        if not self.level:
-            if not self.initiating_call:
-                self.level = 0
-            else:
-                self.level = kwargs['initiating_call'].level + 1
-        """
+        # this_call.save()
 
         # Finally, pass along return value of fn
         return return_value
@@ -311,7 +295,7 @@ class CallRecord(Document):
                      'stop_time',
                      'user',
                      'hostname',
-                     'exit_status']
+                     'exit_status',]
 
     initiating_call = ReferenceField('self', null=True)
     stack_level = IntField(default=0)
@@ -323,12 +307,16 @@ class CallRecord(Document):
     user = StringField(max_length=255)
     hostname = StringField(max_length=255)
     exit_status = StringField(max_length=40, default='DONE')
+    info = StringField(default='')
 
     def __init__(self, *args, **kwargs):
         """To create a CallRecord, should receive `feature` and `initiating_call`
         args
         """
         super().__init__(*args, **kwargs)
+
+        # TODO
+        # Check if this is a recovery
 
         # Generate a uid
         # TODO maybe this should be a hash of the called feature's state
@@ -339,6 +327,37 @@ class CallRecord(Document):
         self.uid = h.hexdigest()[:CALLRECORD_UID_LEN]
 
         self.save()
+
+    def __enter__(self):
+        """Note use of CallRecord as a context manager for refresh function.
+        Redirects stdout: but note inheriting from contextlib.redirect_stdout
+        causes a metaclass conflict.
+        """
+        self.__old_stdout = sys.stdout
+        sys.stdout = self
+        self.start_time = dt.datetime.now()
+        self.save()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.stop_time = dt.datetime.now()
+        if exc_type is not None:
+            self.exit_status = '{}: {}'.format(CallRecord.FAILED, exc_value)
+        else:
+            self.exit_status = CallRecord.DONE
+
+        sys.stdout = self.__old_stdout
+        self.save()
+
+    def write(self, data: str):
+        """TODO docstring
+        """
+        self.info += data
+
+    def flush(self):
+        """TODO docstring
+        """
+        pass
 
     def __str__(self):
         s = self.uid[:16] + '...\n'

@@ -57,7 +57,7 @@ class StatusMessage:
         self.__capture_io = capture_io
 
     def __enter__(self):
-        """Prints a message describing the action taken"""
+        """Prints a message describing the action taken and redirects io"""
         cprint(self.infostr.ljust(self.num_cols).capitalize(), status='normal',
                end='', flush=True)
         if self.__capture_io:
@@ -65,7 +65,7 @@ class StatusMessage:
             sys.stderr = self.stderr_buff = StringIO()
 
     def __exit__(self, exc_type, exc_value, traceback):
-        """Cleans up and prints the terminating status string."""
+        """Prints the terminating status string and restores io"""
         if exc_type is None:
             cprint(self.donestr, status='ok', file=self.__old_stdout)
         else:
@@ -104,6 +104,7 @@ def pprint_func(name: str, doc: str) -> None:
 def cstr(s: str, status: str = 'normal') -> str:
     """
     Wrap a string with ANSI color annotations
+    TODO there's a package for this; you can rip this out.
     """
     if platform.system() == 'Windows':
         return s  # ANSI colors unsupported on Windows
@@ -214,7 +215,7 @@ def configure_logging(logfile=''):
     Set up the logging module to write to the correct logfile, etc.
     """
 
-    if logfile is None or logfile is '':
+    if logfile == '' or logfile is None:
         # Set the log output to the null file. This should actually be cross-
         # platform, i.e. equal to '/dev/null' on unix systems and 'NULL' on
         # windows.

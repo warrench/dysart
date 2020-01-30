@@ -12,6 +12,7 @@ from dysart.labber.labber_feature import LabberFeature, result
 from dysart.equs_std import measurements as meas
 from dysart.equs_std.fitting import spectra, rabi
 from dysart.messages.messages import logged
+from dysart.services.streams import stdimg, stdmsg, stdfit
 
 ureg = pint.UnitRegistry()
 
@@ -54,6 +55,7 @@ class QubitSpectrum(LabberFeature):
         drive_frequency_data = last_entry[self.drive_frequency_channel]
         polarization_Z_data = last_entry[self.polarization_Z_channel]
         fit = spectra.fit_spectrum(drive_frequency_data, polarization_Z_data, 1)
+        stdmsg.write('I\'ve just done a fit!\n')
         return fit.params.valuesdict()
 
     @result

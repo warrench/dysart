@@ -41,18 +41,6 @@ def run_command(services) -> int:
 
 
 if __name__ == '__main__':
-    # ACTIVATE THE PYTHON ENVIRONMENT
-    # Note that calls to `exec` are really dangerous. If this module is
-    # compromised, an attacker can basically run arbitrary code on the server.
-    if conf.config['ENV_MANAGER'] == 'virtualenv':
-        activate_path = os.path.join(conf.dys_path, conf.config['ENV_NAME'],
-                                     'bin', 'activate_this.py')
-        exec(open(activate_path).read(), dict(__file__=activate_path))
-    elif conf.config['ENV_MANAGER'] == 'conda':
-        raise NotImplementedError("Conda is not yet fully supported!")
-    else:
-        raise NotImplementedError("Unsupported environment manager.")
-
     # Import the modules that have package dependencies, and need the
     # environment to be activated.
     from dysart.services.database import Database

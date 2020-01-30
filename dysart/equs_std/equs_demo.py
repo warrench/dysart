@@ -1,6 +1,3 @@
-#! $DYS_PATH/dysenv/bin/python
-# ^ This is potentially fragile; might not work on Windows.
-
 from dysart.equs_std.equs_features import QubitSpectrum, QubitRabi
 from dysart.messages.messages import cprint, StatusMessage
 from dypy import include_feature

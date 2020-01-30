@@ -459,5 +459,3 @@ class LabberCall(CallRecord):
     def __init__(self, feature, *args, **kwargs):
         super().__init__(feature, *args, **kwargs)
         self.log_name = feature.next_log_name()
-
-

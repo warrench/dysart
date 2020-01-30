@@ -40,17 +40,20 @@ import json
 import logging
 from queue import PriorityQueue, Queue
 import socketserver
+import threading
 from typing import Optional, Union, Tuple
 from urllib.parse import urlparse, parse_qs
 
 import mongoengine as me
 import Labber
+import SG_Network
 
 import dysart.messages.messages as messages
 from dysart.messages.messages import StatusMessage
 from dysart.messages.errors import *
 import dysart.services.service as service
 from dysart.services.jobscheduler import Job, JobScheduler
+from dysart.services.streams import DysDataStream
 import toplevel.conf as conf
 
 # TEMPORARY
@@ -76,9 +79,10 @@ class Dyserver(service.Service):
         self.labber_host = labber_host if labber_host else conf.config['LABBER_HOST']
         self.job_scheduler = JobScheduler()
         self.project = project
-        # all hard-coded constants for now. This will/must change!
-        self.logfile = os.path.join(conf.dys_path, 'debug_data',
-                                    'log', 'dysart.log')
+        self.logfile = os.path.join(conf.config['LOG_PATH'], 'dysart.log')
+        self.stdmsg = DysDataStream()
+        self.stdimg = DysDataStream()
+        self.stdfit = DysDataStream()
 
     def is_running(self) -> bool:
         return hasattr(self, 'httpd')
@@ -93,17 +97,19 @@ class Dyserver(service.Service):
         except ConnectionError as e:
             raise e
             #pass
-        #with socketserver.TCPServer(("", self.port), DysHandler) as self.httpd:
-        #    self.httpd.serve_forever()
+
+        def run_httpd():
+            with socketserver.TCPServer(('127.0.0.1', self.port), DysHandler) as httpd:
+                httpd.serve_forever()
+        # threading.Thread(target=run_httpd).start()
 
     def _stop(self) -> None:
         """Ends the server process"""
         self.job_scheduler.stop()
-        # self.httpd.shutdown()
+        self.httpd.shutdown()
 
     def db_connect(self, host_name, host_port) -> None:
-        """
-        Sets up database client for python interpreter.
+        """Sets up database client for python interpreter.
         """
         with StatusMessage('{}connecting to database...'.format(messages.TAB)):
             try:
@@ -118,14 +124,15 @@ class Dyserver(service.Service):
                 self.db_client = client
 
     def labber_connect(self, host_name) -> None:
-        """
-        sets a labber client to the default instrument server.
+        """Sets a labber client to the default instrument server.
         """
         with StatusMessage('{}Connecting to instrument server...'.format(messages.TAB)):
             try:
                 with LabberContext():
                     labber_client = Labber.connectToServer(host_name)
-            except ConnectionError as e:
+            # Pokemon exception handling generally frowned upon, but I'm not
+            # sure how to catch both a ConnectionError and an SG_Network.Error.
+            except (ConnectionError, SG_Network.Error) as e:
                 labber_client = None
                 raise ConnectionError
             finally:
@@ -139,8 +146,7 @@ class Dyserver(service.Service):
         pass
 
     def load_project(self, proj_name):
-        """
-        loads a project into memory.
+        """Loads a project into memory.
         """
         return
         """
@@ -153,8 +159,7 @@ class Dyserver(service.Service):
         """
 
     def set_project(self, proj_name):
-        """
-        sets the working project
+        """Sets the working project
         """
 
 
@@ -180,11 +185,11 @@ class AuthStatus(Enum):
 
 
 class DysHandler(http.server.BaseHTTPRequestHandler):
-    """
-    handles requests to DySART system job scheduler
+    """Handles requests to DySART system job scheduler
 
     Structure of queries:
-    GET /db_name?user=username&secret=passphrase&request=code
+    GET /db/db_name?user=username&secret=passphrase&request=code
+    GET /stream/stream_name
     """
 
     # remote hosts from which incoming connections will be accepted.
@@ -235,7 +240,7 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
         secrets = query.get(self.qs_tokens['secret'])
         return (users[-1] if users else None, secrets[-1] if secrets else None)
 
-    def get_request(self) -> Request:
+    def get_db_request(self) -> Request:
         """dummy method to extract request from query string"""
         # TODO
         query = parse_qs(urlparse(self.path).query)
@@ -250,13 +255,21 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
         this is a total hack for right now"""
         return globals()[doc_class]
 
-    def handle_request(self, db, request):
+    def handle_db_request(self, request):
         """dummy method for interpreting and fulfilling the request"""
+        # TODO More careful exception handling: this is really a bit of a mess.
         try:
-            feature_class = self.get_document_class(request.doc_class)
-            doc = feature_class.objects.get(name=request.name)
-            method = getattr(doc, request.method)
-            res = method()
+            path_components = urllib.parse(self.path).path.split('/')
+            if path_components[0] == 'db':
+                feature_class = self.get_document_class(request.doc_class)
+                doc = feature_class.objects.get(name=request.name)
+                method = getattr(doc, request.method)
+                res = method()
+            elif path_components[0] == 'streams':
+                stream = path_components[1]
+                # TODO
+                pass
+
         except me.DoesNotExist:
             raise me.DoesNotExist  # to give some kind of error status code
         except me.MultipleObjectsReturned:  # some other error status code
@@ -268,6 +281,7 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         print("got a {} from client {}:\n{}\n".format(self.command, self.client_address, self.requestline))
         print("requested path is: {}".format(self.path))
+
         if self.client_address not in self.hosts:
             self.log_error('received remote connection from {}'.format(self.client_address))
             Exception('bad client address: {}'.format(self.client_address))
@@ -282,10 +296,9 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
 
         # tell them the path they requested
         try:
-            db = ''
-            request = self.get_request()
+            request = self.get_db_request()
             print(request)
-            payload = self.handle_request(db, request)
+            payload = self.handle_db_request(request)
             response = payload.encode('utf-8')
 
             self._set_headers_ok()

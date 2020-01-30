@@ -9,6 +9,7 @@ import fileinput
 import sys
 from typing import IO, Optional
 from warnings import warn
+import shutil
 
 # a configuration file is necessary because it contains settings information
 # that will be needed even when the mongodb database is down, or not yet
@@ -16,9 +17,21 @@ from warnings import warn
 # we will use this instead of passing around loads of global state or setting
 # and getting environment variables.
 CONFIG_FN = '.dysart.conf'
+DEFAULT_CONFIG_FN = '.default.conf'
 dys_path = os.path.abspath(os.path.join(
             __file__, os.path.pardir, os.path.pardir))
+
 config_path = os.path.join(dys_path, CONFIG_FN)
+# Try to ensure that there are at least default values at the expected path.
+if not os.path.exists(config_path):
+    default_path = os.path.join(dys_path, DEFAULT_CONFIG_FN)
+    try:
+        shutil.copy2(default_path, config_path)
+    except Exception as e:  # Maybe shouldn't use Pokemon exception handling
+        print(e)
+        print("No config file; failed to copy default config file. Exiting dysart.",
+              sys.stderr)
+        exit(1)
 
 
 class FileMapping(MutableMapping):
@@ -30,7 +43,7 @@ class FileMapping(MutableMapping):
         self.path = path
         self.sep = sep
 
-    def _ensure_exists(self):
+    def __ensure_exists(self):
         self.open('a').close()
 
     def get_line_key(self, line: str) -> str:
@@ -51,26 +64,15 @@ class FileMapping(MutableMapping):
             val = default
         return val
 
-    """
-    def keys(self) -> typing.List[str]:
-        do this better
-        self._ensure_exists()
-        with self.open('r') as f:
-            for line in f:
-                yield self.get_line_key(line)
-    """
-
-    #def values(self) -> typing.List[str]:
-
     def __iter__(self):
-        self._ensure_exists()
+        self.__ensure_exists()
         with self.open('r') as f:
             for line in f:
                 yield self.get_line_key(line)
 
     def __getitem__(self, key: str) -> str:
         """read a single value by parameter name from the config file"""
-        self._ensure_exists()
+        self.__ensure_exists()
         with self.open('r') as f:
             for line in f:
                 line_key, val = line.split(self.sep, maxsplit=1)
@@ -80,22 +82,11 @@ class FileMapping(MutableMapping):
 
     def __len__(self):
         """get the length of the config file"""
-        self._ensure_exists()
+        self.__ensure_exists()
         with self.open('r') as f:
             # just count the number of non-whitespace lines
             n = sum(1 for line in f.readlines() if not line.isspace())
         return n
-
-    #def  __contains__(self, key: str) -> bool:
-    #    """check whether the config file contains a key or not"""
-    #    try:
-    #        self.__getitem__(key)
-    #        return True
-    #    except KeyError:
-    #        return False
-
-    #def __missing__(self):
-    #    pass
 
     def __setitem__(self, key: str, val: str) -> None:
         """write a single value by parameter name into the config file"""
@@ -108,7 +99,7 @@ class FileMapping(MutableMapping):
         if val.strip() != val:
             warn('value \'{}\' contains whitespace and will be stripped'.format(key))
         # search for key in file and replace
-        self._ensure_exists()
+        self.__ensure_exists()
         with fileinput.input(self.path, inplace=True) as f:
             key_found = False
             for line in f:
@@ -132,7 +123,7 @@ class FileMapping(MutableMapping):
         if key.strip() != key:
             warn('key \'{}\' contains whitespace and will be stripped'.format(key))
         # search for key in file and delete line
-        self._ensure_exists()
+        self.__ensure_exists()
         with fileinput.input(self.path, inplace=True) as f:
             for line in f:
                 line = line.rstrip()

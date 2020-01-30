@@ -111,7 +111,7 @@ def feature_dag_setup():
         globals().update({name: getattr(proj, name) for name in feature_names})
 
     except Exception as e:
-        print(str(e))
+        print(e)
         print("could not import feature tree.")
 
 
@@ -124,7 +124,7 @@ def include_feature(feature_class: type, feature_name: str):
     since MongoDB lacks transactions. This might be an important design
     consideration, so keep an eye on this.
 
-    The equivalent deprecated moongoengine function is called
+    The equivalent deprecated mongoengine function is called
     `get_or_create`.
 
     Args:
@@ -151,10 +151,9 @@ def include_feature(feature_class: type, feature_name: str):
 
 if __name__ == '__main__':
     messages.cprint(WELCOME_MESSAGE, status='bold')
-    # this is really pretty dangerous!
+    # this is really pretty dangerous! (Why? Global state bad?)
     services = [Database(), Dyserver()]
-    db_server = Database()
-    dyserver = Dyserver()
+    db_server, dyserver = services
     start(db_server, dyserver)
     messages.configure_logging(logfile=dyserver.logfile)  # should all be managed by server
     feature_dag_setup()

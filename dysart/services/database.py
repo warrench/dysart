@@ -25,7 +25,7 @@ class Database(Service):
         if platform.system() in ('Darwin', 'Linux'):
             return bool(self.get_pid())
         elif platform.system() == 'Windows':
-            return False
+            raise UnsupportedPlatformError
         else:
             raise UnsupportedPlatformError
 
@@ -52,14 +52,14 @@ class Database(Service):
             pass
 
         if platform.system() in ('Darwin', 'Linux'):
-            self.completed_proc = subprocess.run(
-              'mongod --fork --quiet --logappend --logpath {} --dbpath {}'.format(
-                self.log_path, self.db_path).split(), capture_output=True)
+            command = f"""mongod --port {conf.config["DB_PORT"]} --fork --quiet
+            --logappend --logpath {self.log_path} --dbpath {self.db_path}
+            """.split()
+            self.completed_proc = subprocess.run(command, capture_output=True)
             self._check_error()
 
         elif platform.system() == 'Windows':
-            # flags = {}  # put here
-            pass
+            raise UnsupportedPlatformError
 
     def _stop(self):
         if platform.system() in ('Darwin', 'Linux'):
@@ -68,7 +68,7 @@ class Database(Service):
             except Exception:
                 pass
         elif platform.system() == 'Windows':
-            pass
+            raise UnsupportedPlatformError
 
     @property
     def db_path(self) -> str:
