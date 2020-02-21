@@ -9,6 +9,10 @@ class ServiceError(DysartError):
     pass
 
 
+class ServiceNotFoundError(ServiceError):
+    status = 'fail'
+    message = 'service not found.'
+
 class JobError(ServiceError):
     status = 'warn'
     message = 'job failed.'

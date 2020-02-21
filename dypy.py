@@ -14,19 +14,15 @@ running physical experiments.
 """
 
 import os
-import sys
 import builtins
-from functools import wraps
 import importlib.util
 
 import mongoengine as me
-import Labber
 
-from toplevel.conf import dys_path, config
-from toplevel.util import start, stop, restart, status
+from toplevel.conf import DYS_PATH, config
+from toplevel.util import start, stop
 from dysart.feature import CallRecord, get_records_by_uid_pre
 from dysart.services.dyserver import Dyserver
-from dysart.services.database import Database
 import dysart.messages.messages as messages
 
 
@@ -41,7 +37,6 @@ __HELP_FUNCTIONS = []
 def _dypy_help(fn):
     __HELP_FUNCTIONS.append(fn)
     return fn
-
 
 # DyPy builtins
 
@@ -58,7 +53,7 @@ def dypy_help():
 def quit():
     """Overloads the builtin quit to close all DySART services first.
     """
-    stop(*services)
+    stop(dyserver)
     builtins.quit()
 
 @_dypy_help
@@ -94,7 +89,10 @@ def feature_dag_setup():
     Retrieves the project specified by config variable `DEFAULT_PROJ`
     """
     try:
-        proj_path = config['DEFAULT_PROJ']
+        proj_path = os.path.join(
+            DYS_PATH,
+            config['DEFAULT_PROJ']
+        )
     except KeyError:
         return
     try:
@@ -151,9 +149,9 @@ def include_feature(feature_class: type, feature_name: str):
 
 if __name__ == '__main__':
     messages.cprint(WELCOME_MESSAGE, status='bold')
-    # this is really pretty dangerous! (Why? Global state bad?)
-    services = [Database(), Dyserver()]
-    db_server, dyserver = services
-    start(db_server, dyserver)
+
+    dyserver = Dyserver('dyserver')
+    start(dyserver)
     messages.configure_logging(logfile=dyserver.logfile)  # should all be managed by server
+
     feature_dag_setup()

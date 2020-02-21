@@ -1,25 +1,28 @@
-import os
-import sys
 from abc import ABC, abstractmethod
-from enum import Enum
 import platform
-import shutil
 import subprocess
 
-from toplevel.conf import dys_path, config
+from toplevel.conf import config
 from dysart.messages.errors import AlreadyOnError, AlreadyOffError, ServiceError
 from dysart.messages.messages import StatusMessage
 
 
 class Service(ABC):
 
+    def register(self):
+        pass
+
     def start(self, message=None):
         if message is None:
             message = 'Starting {}...'.format(self.__class__.__name__)
         with StatusMessage(message):
-            if self.is_running():
+            if not self.is_running():
+                self._start()
+            else:
                 raise AlreadyOnError
-            self._start()
+        # if self.is_running() and not hasattr(self, "background_process'):
+        #     raise AlreadyOnError
+        # self._start()
 
     def stop(self, message=None):
         if message is None:

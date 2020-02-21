@@ -29,31 +29,22 @@ value returned.
 """
 
 import os
-import sys
-import asyncio
 from collections import namedtuple
-from enum import Enum
 from http import HTTPStatus
 import http.server
 from io import StringIO
-import json
-import logging
-from queue import PriorityQueue, Queue
 import socketserver
-import threading
-from typing import Optional, Union, Tuple
+from typing import Optional, Tuple
 from urllib.parse import urlparse, parse_qs
 
 import mongoengine as me
-import Labber
-import SG_Network
 
-import dysart.messages.messages as messages
 from dysart.messages.messages import StatusMessage
 from dysart.messages.errors import *
 import dysart.services.service as service
 from dysart.services.jobscheduler import Job, JobScheduler
 from dysart.services.streams import DysDataStream
+from dysart.services.database import Database
 import toplevel.conf as conf
 
 # TEMPORARY
@@ -70,16 +61,21 @@ class Dyserver(service.Service):
                  db_port=None,
                  labber_host=None,
                  project=None):
+        """Start and connect to standard services
         """
-        connect to standard services
-        """
+        self.db_server = Database('database')
+        self.db_server.start()
+        self.db_port = db_port if db_port else self.db_server.port
+
         self.port = port if port else int(conf.config['SERVER_PORT'])
         self.db_host = db_host if db_host else conf.config['DB_HOST']
-        self.db_port = db_port if db_port else int(conf.config['DB_PORT'])
         self.labber_host = labber_host if labber_host else conf.config['LABBER_HOST']
         self.job_scheduler = JobScheduler()
         self.project = project
-        self.logfile = os.path.join(conf.config['LOG_PATH'], 'dysart.log')
+        self.logfile = os.path.join(
+            conf.DYS_PATH,
+            conf.config['LOGFILE_NAME']
+        )
         self.stdmsg = DysDataStream()
         self.stdimg = DysDataStream()
         self.stdfit = DysDataStream()
@@ -96,7 +92,6 @@ class Dyserver(service.Service):
             self.load_project(self.project)
         except ConnectionError as e:
             raise e
-            #pass
 
         def run_httpd():
             with socketserver.TCPServer(('127.0.0.1', self.port), DysHandler) as httpd:
@@ -106,6 +101,7 @@ class Dyserver(service.Service):
     def _stop(self) -> None:
         """Ends the server process"""
         self.job_scheduler.stop()
+        self.db_server.stop()
         self.httpd.shutdown()
 
     def db_connect(self, host_name, host_port) -> None:
@@ -113,15 +109,13 @@ class Dyserver(service.Service):
         """
         with StatusMessage('{}connecting to database...'.format(messages.TAB)):
             try:
-                client = me.connect('debug_data', host=host_name, port=host_port)
+                self.db_client = me.connect(conf.config['DEFAULT_DB'], host=host_name, port=host_port)
                 # Do the following lines do anything? I actually don't know.
                 sys.path.pop(0)
                 sys.path.insert(0, os.getcwd())
-            except Exception as e:
-                client = None
+            except Exception as e:  # TODO
+                self.db_client = None
                 raise ConnectionError
-            finally:
-                self.db_client = client
 
     def labber_connect(self, host_name) -> None:
         """Sets a labber client to the default instrument server.
@@ -132,7 +126,7 @@ class Dyserver(service.Service):
                     labber_client = Labber.connectToServer(host_name)
             # Pokemon exception handling generally frowned upon, but I'm not
             # sure how to catch both a ConnectionError and an SG_Network.Error.
-            except (ConnectionError, SG_Network.Error) as e:
+            except ConnectionError as e:
                 labber_client = None
                 raise ConnectionError
             finally:
@@ -149,14 +143,6 @@ class Dyserver(service.Service):
         """Loads a project into memory.
         """
         return
-        """
-        if not proj_name:
-            self.proj_name = None
-        else:
-            # load each object in a project in this database
-
-            self.proj_name = proj_name
-        """
 
     def set_project(self, proj_name):
         """Sets the working project

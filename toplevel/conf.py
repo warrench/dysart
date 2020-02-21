@@ -18,13 +18,13 @@ import shutil
 # and getting environment variables.
 CONFIG_FN = '.dysart.conf'
 DEFAULT_CONFIG_FN = '.default.conf'
-dys_path = os.path.abspath(os.path.join(
+DYS_PATH = os.path.abspath(os.path.join(
             __file__, os.path.pardir, os.path.pardir))
 
-config_path = os.path.join(dys_path, CONFIG_FN)
+config_path = os.path.join(DYS_PATH, CONFIG_FN)
 # Try to ensure that there are at least default values at the expected path.
 if not os.path.exists(config_path):
-    default_path = os.path.join(dys_path, DEFAULT_CONFIG_FN)
+    default_path = os.path.join(DYS_PATH, DEFAULT_CONFIG_FN)
     try:
         shutil.copy2(default_path, config_path)
     except Exception as e:  # Maybe shouldn't use Pokemon exception handling

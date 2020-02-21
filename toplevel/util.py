@@ -27,11 +27,8 @@ def dypy_session(*args):
     """Launches an interactive Python session with all services running"""
 
     # run an interpreter subprocess
-    dypy_startup_path = os.path.join(conf.dys_path, 'dypy.py')
+    dypy_startup_path = os.path.join(conf.DYS_PATH, 'dypy.py')
     subprocess.run('python -i {}'.format(dypy_startup_path).split())
-
-    #for service in prev_off:
-    #    service.stop()
 
 
 def restart(*services):

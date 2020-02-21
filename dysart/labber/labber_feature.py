@@ -35,10 +35,12 @@ import toplevel.conf as conf
 try:
     if platform.system() == 'Darwin':
         st.setExePath(os.path.join(os.path.sep, 'Applications', 'Labber'))
+        MAX_PATH = os.statvfs('/').f_namemax
     elif platform.system() == 'Linux':
         st.setExePath(os.path.join(os.path.sep, 'usr', 'share', 'Labber', 'Program'))
+        MAX_PATH = os.statvfs('/').f_namemax
     elif platform.system() == 'Windows':
-        pass
+        MAX_PATH = 260
     else:
         raise Exception('Unsupported platform!')
 except Exception as e:
@@ -454,7 +456,7 @@ class LabberCall(CallRecord):
     """
 
     # should get the max name length on the labber output directory from server
-    log_name = StringField(max_length=os.statvfs('/').f_namemax)
+    log_name = StringField(max_length=MAX_PATH)
 
     def __init__(self, feature, *args, **kwargs):
         super().__init__(feature, *args, **kwargs)
