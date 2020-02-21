@@ -14,7 +14,7 @@ import numbers
 import platform
 import re
 import tempfile
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Union
 from warnings import warn
 
 import numpy as np
@@ -27,24 +27,23 @@ from dysart.labber.labber_serialize import save_labber_scenario_from_dict
 from dysart.labber.labber_util import no_recorded_result
 from dysart.feature import Feature, CallRecord, refresh
 import dysart.messages.messages as messages
+from dysart.messages.errors import UnsupportedPlatformError
 import toplevel.conf as conf
 
 # Set path to executable. This should be done not-here, but it needs to be put
 # somewhere for now.
 
-try:
-    if platform.system() == 'Darwin':
-        st.setExePath(os.path.join(os.path.sep, 'Applications', 'Labber'))
-        MAX_PATH = os.statvfs('/').f_namemax
-    elif platform.system() == 'Linux':
-        st.setExePath(os.path.join(os.path.sep, 'usr', 'share', 'Labber', 'Program'))
-        MAX_PATH = os.statvfs('/').f_namemax
-    elif platform.system() == 'Windows':
-        MAX_PATH = 260
-    else:
-        raise Exception('Unsupported platform!')
-except Exception as e:
-    pass
+if platform.system() == 'Darwin':
+    st.setExePath(os.path.join(os.path.sep, 'Applications', 'Labber'))
+    MAX_PATH = os.statvfs('/').f_namemax
+elif platform.system() == 'Linux':
+    st.setExePath(os.path.join(os.path.sep, 'usr', 'share', 'Labber', 'Program'))
+    MAX_PATH = os.statvfs('/').f_namemax
+elif platform.system() == 'Windows':
+    st.setExePath(os.path.join('C:\\', 'Program Files', 'Labber', 'Program'))
+    MAX_PATH = 260
+else:
+    raise UnsupportedPlatformError
 
 """
 Register default labber client. Using a global variable is maybe all right for
@@ -113,7 +112,7 @@ class LogHistory:
     should be considered mostly an implementation detail of the Results class.
 
     TODO: should this subclass an abc?
-    TODO: should this support slicing?
+    TODO: should this support slicing? Yeah, probably. That would be awesome.
     TODO: should/can we assume that there are never any holes in the history?
           currently _assumes that there are no holes._
     TODO: cache size is currently unbounded.
@@ -123,24 +122,32 @@ class LogHistory:
     def __init__(self, feature_name: str, labber_data_dir: str, log_name_template: str):
         self.feature_name = feature_name
         self.labber_data_dir = labber_data_dir
+        os.makedirs(self.labber_data_dir, exist_ok=True)
+
         self.log_name_template = log_name_template
         self.log_cache = {}  # contains logs that are held in memory
 
-    def __getitem__(self, index: int) -> "Optional[Labber.LogFile]":  # not sure of type?
+    def __getitem__(self, index: Union[int, slice]) -> "Optional[Labber.LogFile]":  # not sure of type?
         # TODO: _really_ think if this is the right way to write this
-        if index < 0:
-            return self.__getitem__(len(self) + index)
-        else:
-            log_path = self.log_path(index)
-            if not os.path.isfile(log_path):
-                raise IndexError('Labber logfile with index {} cannot be found'.format(index))
-            if log_path not in self.log_cache:
-                log_file = Labber.LogFile(self.log_path(index))
-                self.log_cache[log_path] = []
-                for i in range(log_file.getNumberOfEntries()):
-                    self.log_cache[log_path].append(log_file.getEntry(i))
+        if type(index) == int:
+            if index < 0:
+                return self.__getitem__(len(self) + index)
+            else:
+                log_path = self.log_path(index)
+                if not os.path.isfile(log_path):
+                    raise IndexError('Labber logfile with index {} cannot be found'.format(index))
+                if log_path not in self.log_cache:
+                    log_file = Labber.LogFile(self.log_path(index))
+                    self.log_cache[log_path] = []
+                    for i in range(log_file.getNumberOfEntries()):
+                        self.log_cache[log_path].append(log_file.getEntry(i))
 
-            return self.log_cache[log_path]
+                return self.log_cache[log_path]
+        elif type(index) == slice:
+            # TODO
+            raise NotImplementedError
+        else:
+            raise TypeErorr
 
     def __contains__(self, index: int) -> bool:
         """Check whether an index is used"""

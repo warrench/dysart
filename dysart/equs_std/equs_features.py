@@ -55,7 +55,6 @@ class QubitSpectrum(LabberFeature):
         drive_frequency_data = last_entry[self.drive_frequency_channel]
         polarization_Z_data = last_entry[self.polarization_Z_channel]
         fit = spectra.fit_spectrum(drive_frequency_data, polarization_Z_data, 1)
-        stdmsg.write('I\'ve just done a fit!\n')
         return fit.params.valuesdict()
 
     @result
