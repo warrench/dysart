@@ -15,7 +15,6 @@ import platform
 import re
 import tempfile
 from typing import List, Optional, Callable, Union
-from warnings import warn
 
 import numpy as np
 from mongoengine import *
@@ -119,8 +118,8 @@ class LogHistory:
 
     """
 
-    def __init__(self, feature_name: str, labber_data_dir: str, log_name_template: str):
-        self.feature_name = feature_name
+    def __init__(self, feature_id: str, labber_data_dir: str, log_name_template: str):
+        self.feature_id = feature_id
         self.labber_data_dir = labber_data_dir
         os.makedirs(self.labber_data_dir, exist_ok=True)
 
@@ -177,7 +176,7 @@ class LogHistory:
 
     def log_name(self, index: int) -> str:
         """Gets the log name associated with an index"""
-        return f'_{self.feature_name}_{index}'.join(
+        return f'_{self.feature_id}_{index}'.join(
             os.path.splitext(self.log_name_template))
 
     def log_path(self, index: int) -> str:
@@ -188,8 +187,8 @@ class LogHistory:
         """Gets the index of a filename if it is an output log name, or None if
         it is not."""
         root, ext = os.path.splitext(self.log_name_template)
-        # pattern = '^' + root + '_' + self.feature_name + '_(\d+)' + ext + '$'
-        pattern = f'^{root}_{self.feature_name}_(\\d+){ext}$'
+        # pattern = '^' + root + '_' + self.feature_id + '_(\d+)' + ext + '$'
+        pattern = f'^{root}_{self.feature_id}_(\\d+){ext}$'
         m = re.search(pattern, file_name)
         return int(m.groups()[0]) if m else None
 
@@ -240,7 +239,7 @@ class LabberFeature(Feature):
         self.config = st.MeasurementObject(self.template_file_path,
                                            self.output_file_path)
 
-        self.log_history = LogHistory(self.name,
+        self.log_history = LogHistory(self.id,
                                       conf.config['LABBER_DATA_DIR'],
                                       os.path.split(self.output_file_path)[-1])
 

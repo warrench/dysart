@@ -12,13 +12,12 @@ without having to think about _anything_ more than the highest leayer of
 """
 
 import datetime as dt
-from enum import Enum
 from functools import wraps
 import getpass
 import hashlib
 import socket
 import sys
-import time
+from typing import *
 
 from mongoengine import *
 
@@ -84,10 +83,9 @@ def refresh(fn):
             is_stale = False
             # if this call recurses, recurse on ancestors.
             if feature.is_recursive():
-                for parent_key in feature.parents:
+                for parent in feature.parents.values():
                     # Call parent to refresh recursively; increment stack depth
-                    parent_is_stale = feature.parents[parent_key]\
-                                    .touch(initiating_call=record, is_stale=0)
+                    parent_is_stale = parent.touch(initiating_call=record, is_stale=0)
                     is_stale |= parent_is_stale
             # If stale for some other reason, also flag to be updated.
             feature_expired = feature._expired(call_record=None)
@@ -132,11 +130,11 @@ class Feature(Document):
     # structure of the payload is pretty constrained, and on top of that I
     # don't really know how it is represented in the database.
     # Hence "data" as a dict blob.
-    name = StringField(default='', required=True, primary_key=True)
+    id = StringField(default='', required=True, primary_key=True)
     manual_expiration_switch = BooleanField(default=False)
     is_stale_func = StringField(max_length=60)
     refresh_func = StringField(max_length=60)
-    parents = DictField(default={})
+    parent_ids = DictField(default={})
 
     def __init__(self, **kwargs):
         # Create a new document
@@ -156,12 +154,11 @@ class Feature(Document):
         """should report its name, most-derived (?) type, parents, and names and
         expiration statuses thereof.
         """
-        s = ''
         # Initialize as object name with type judgment
         if self._expired():
-            s = messages.cstr(self.name, 'fail')
+            s = messages.cstr('[EXP]', 'fail')
         else:
-            s = messages.cstr(self.name, 'ok')
+            s = messages.cstr('[OK]', 'ok')
         # Descriptor of this feature
         s += '\t: ' + messages.cstr(self.__class__.__name__, 'bold')
         # This feature's status
@@ -175,7 +172,7 @@ class Feature(Document):
         """Draw to the terminal a pretty-printed tree of all this Feature's
         dependents.
         """
-        print(messages.tree(self, lambda obj: obj.parents.values()))
+        print(messages.tree(self, lambda obj: self.parents.values()))
 
     def _properties(self):
         """
@@ -253,23 +250,34 @@ class Feature(Document):
         """
         return True
 
-    def add_parents(self, *new_parents) -> bool:
-        """Insert a dependency into the feature's parents list and write to the
-        database. Can pass a single feature, multiple features as
-        comma-separated parameters, a list of features, a list of list of
-        features, and so on.
+    @property
+    def parents(self):
+        """How parents should be accessed by clients. This property is a mapping
+        from parent keys, which identify the relationship, purpose or intent of a
+        parent object, to the corresponding parent objects.
+
         """
-        for parent in new_parents:
-            # Handle (arbitrarily deeply nested) lists of parents.
-            # This works with explicit type-checking, but it's not the most
-            # pythonic solution in the world. Could be done more canonically
-            # Feature weren't iterable!
-            if isinstance(parent, Feature):
-                if parent not in self.parents:
-                    print("ok, adding a parent!")
-                    self.parents.append(parent)
-            else:
-                self.add_parents(*parent)
+        return {key: self.__get_parent(key) for key in self.parent_ids}
+
+    def __get_parent(self, parent_key):
+        """Returns the parent associated with a parent key. This is an internal
+        method used by the `parents` property.
+
+        """
+        parents = Feature.objects(id=self.parent_ids[parent_key])
+        if len(parents) == 0:
+            # TODO
+            pass
+        if len(parents) > 1:
+            raise MultipleObjectsReturned
+        return parents[0]
+
+    def add_parents(self, new_parents: Dict):
+        """Insert dependencies into the feature's parents dictionary and
+        write to the database.
+        """
+        for parent_key, parent_id in new_parents.items():
+            self.parent_ids[parent_key] = parent_id
         self.save()
 
 
@@ -320,7 +328,7 @@ class CallRecord(Document):
 
         # Generate a uid
         # TODO maybe this should be a hash of the called feature's state
-        h = hashlib.sha1(self.feature.name.encode('utf-8'))
+        h = hashlib.sha1(self.feature.id.encode('utf-8'))
         h.update(str(self.start_time).encode('utf-8'))
         if self.initiating_call:
             h.update(self.initiating_call.uid.encode('utf-8'))
@@ -365,7 +373,7 @@ class CallRecord(Document):
             max_attr_len = max(map(len, CallRecord.printed_attrs))
             val = getattr(self, attr)
             if isinstance(val, Feature):
-                val = val.name
+                val = val.id
             s += ' ' + messages.cstr(attr, 'italic') + ' ' * (max_attr_len - len(attr))\
                     + ' : {}\n'.format(val)
         return s

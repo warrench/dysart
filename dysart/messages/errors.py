@@ -5,6 +5,10 @@ class DysartError(Exception):
     pass
 
 
+class ValidationError(DysartError):
+    pass
+
+
 class ServiceError(DysartError):
     pass
 
@@ -12,6 +16,7 @@ class ServiceError(DysartError):
 class ServiceNotFoundError(ServiceError):
     status = 'fail'
     message = 'service not found.'
+
 
 class JobError(ServiceError):
     status = 'warn'
