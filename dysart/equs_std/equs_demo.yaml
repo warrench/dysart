@@ -1,0 +1,38 @@
+# Demonstration project for showing off Dysart's basic capabilities. This file
+# can serve as a template for your own project specifications.
+
+# Unique project id (currently unenforced)
+Name: equs_demo
+
+# Feature module files. In future versions, there might be other kinds,
+# such as libraries of fitting functions, validity contracts, etc.
+# This section should be bulleted with hyphen characters
+Modules:
+  - ~/equs/QMIT/dysart/dysart/equs_std/equs_features.py
+
+# The features defining the dependency tree in the project.
+# These simple qubit properties will probably, in the future, be rolled
+# into some higher level of abstraction,
+Features:
+  # Spectrum of a simulated qubit. The name `qb_spec` will become a variable
+  # identifier in the global scope.
+  qb_spec:
+      # The `class` field specifies a Python class inheriting from `Feature`,
+      # which probably resides in one of the modules above.
+      class: equs_features.QubitSpectrum
+      # The `id` field is a unique id with which the database tracks this
+      # feature. If you modify the identifier `qb_spec` above and reload the
+      # project but leave this name unchanged, the feature will refer to the
+      # data.
+      id: qubit_spectrum_1
+
+  # Qubit driving
+  qb_rabi:
+      class: equs_features.QubitRabi
+      id: qubit_rabi_1
+      # The parents of each included feature must match those required by
+      # its class. There is not yet any "static" or "import-time" checking
+      # is done correctly by the user, so you might encounter strange
+      # runtime errors if you make a mistake.
+      parents:
+        spec: qubit_spectrum_1

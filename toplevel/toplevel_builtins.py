@@ -4,5 +4,5 @@ the builtin
 """
 from dysart.feature import get_records_by_uid_pre
 
-def dys_help()
-
+def dys_help():
+    pass

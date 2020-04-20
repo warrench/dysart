@@ -42,17 +42,22 @@ class Database(Service):
         return None
 
     @property
-    def port(self) -> int:
+    def port(self) -> Optional[int]:
         """Optionally returns a port number of a running process; none if not running.
         """
+        # TODO really do clean up this fragile method. Abstract away some of the repetition
+        # betwen platforms; if possible remove the dependency on `netstat`, etc.
         system = platform.system()
         if system in 'Linux, Darwin':
-            raise UnsupportedPlatformError
+            p = psutil.Process(self.pid)
+            return p.connections()[0].laddr.port  # TODO can this fail?
         if system == 'Windows':
             # TODO
             #  * any reasonable error handling at all
             #  * relies on specific output behavior of netstat (which might change)
             #  * possibly works accidentally?
+            #  * How does this look for mongodb processes, specifically?
+            #  * Why did I do this in this way in the first place? Does psutil not work?
             try:
                 netstat_output = subprocess.run(
                     f"netstat -ano".split(),
@@ -66,6 +71,7 @@ class Database(Service):
                 # Is the first nonzero port the right thing to return here?
                 return next(port for port in ports if port != 0)
             except Exception as e:
+                # TODO bad: pookemon exception handling
                 return None
 
     # I'd rather use cached_property, but a lot of the lab is still on 3.7.

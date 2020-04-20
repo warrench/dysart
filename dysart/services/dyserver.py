@@ -34,6 +34,7 @@ from http import HTTPStatus
 import http.server
 from io import StringIO
 import socketserver
+from enum import Enum
 from typing import Optional, Tuple
 from urllib.parse import urlparse, parse_qs
 
@@ -51,7 +52,7 @@ import toplevel.conf as conf
 from dysart.equs_std.equs_features import *
 
 # container for structured requests. Develop this as you discover needs.
-Request = namedtuple('Request', ['doc_class', 'name', 'method'])
+Request = namedtuple('Request', ['doc_class', 'id', 'method'])
 
 
 class Dyserver(service.Service):
@@ -136,7 +137,7 @@ class Dyserver(service.Service):
         self.job_scheduler = jobscheduler.JobScheduler()
         self.job_scheduler.start()
 
-    def provision_object(self, cls, name):
+    def provision_object(self, cls, id):
         pass
 
     def load_project(self, proj_name):
@@ -248,7 +249,7 @@ class DysHandler(http.server.BaseHTTPRequestHandler):
             path_components = urllib.parse(self.path).path.split('/')
             if path_components[0] == 'db':
                 feature_class = self.get_document_class(request.doc_class)
-                doc = feature_class.objects.get(name=request.name)
+                doc = feature_class.objects.get(id=request.id)
                 method = getattr(doc, request.method)
                 res = method()
             elif path_components[0] == 'streams':

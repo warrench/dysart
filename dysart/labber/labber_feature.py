@@ -14,11 +14,10 @@ import numbers
 import platform
 import re
 import tempfile
-from typing import List, Optional, Callable
-from warnings import warn
+from typing import List, Optional, Callable, Union
 
 import numpy as np
-from mongoengine import *
+import mongoengine as me
 import Labber
 from Labber import ScriptTools as st
 
@@ -27,24 +26,23 @@ from dysart.labber.labber_serialize import save_labber_scenario_from_dict
 from dysart.labber.labber_util import no_recorded_result
 from dysart.feature import Feature, CallRecord, refresh
 import dysart.messages.messages as messages
+from dysart.messages.errors import UnsupportedPlatformError
 import toplevel.conf as conf
 
 # Set path to executable. This should be done not-here, but it needs to be put
 # somewhere for now.
 
-try:
-    if platform.system() == 'Darwin':
-        st.setExePath(os.path.join(os.path.sep, 'Applications', 'Labber'))
-        MAX_PATH = os.statvfs('/').f_namemax
-    elif platform.system() == 'Linux':
-        st.setExePath(os.path.join(os.path.sep, 'usr', 'share', 'Labber', 'Program'))
-        MAX_PATH = os.statvfs('/').f_namemax
-    elif platform.system() == 'Windows':
-        MAX_PATH = 260
-    else:
-        raise Exception('Unsupported platform!')
-except Exception as e:
-    pass
+if platform.system() == 'Darwin':
+    st.setExePath(os.path.join(os.path.sep, 'Applications', 'Labber'))
+    MAX_PATH = os.statvfs('/').f_namemax
+elif platform.system() == 'Linux':
+    st.setExePath(os.path.join(os.path.sep, 'usr', 'share', 'Labber', 'Program'))
+    MAX_PATH = os.statvfs('/').f_namemax
+elif platform.system() == 'Windows':
+    st.setExePath(os.path.join('C:\\', 'Program Files', 'Labber', 'Program'))
+    MAX_PATH = 260  # This magic constant is a piece of Windows lore.
+else:
+    raise UnsupportedPlatformError
 
 """
 Register default labber client. Using a global variable is maybe all right for
@@ -53,11 +51,13 @@ testing, but this is a pretty dangerous practice in production code.
 default_client = globals().get('dyserver')
 
 
+# NOTE: This lower-case name is correct! This class is intended to be used as a
+# method decorator.
 class result:
     """This decorator class annotates a result-yielding method of a Labber feature.
     """
     def __init__(self, fn: Callable) -> None:
-        """This adccepts a 'result-granting' function and returns a refresh function
+        """This accepts a 'result-granting' function and returns a refresh function
         whose return value is cached into the `results` field of `feature` with key
         the name of the wrapped function.
 
@@ -110,37 +110,48 @@ class result:
 
 class LogHistory:
     """Abstracts history of Labber output files as an array-like object. This
-    should be considered mostly an implementation detail of the Results class.
+    should be considered mostly an implementation detail of the Result class.
 
     TODO: should this subclass an abc?
-    TODO: should this support slicing?
+    TODO: should this support slicing? Yeah, probably. That would be awesome.
     TODO: should/can we assume that there are never any holes in the history?
           currently _assumes that there are no holes._
     TODO: cache size is currently unbounded.
 
     """
 
-    def __init__(self, feature_name: str, labber_data_dir: str, log_name_template: str):
-        self.feature_name = feature_name
-        self.labber_data_dir = labber_data_dir
+    def __init__(self, feature_id: str, labber_data_dir: str, log_name_template: str):
+        self.feature_id = feature_id
+        # Sanitize data dirs that may contain e.g. '~'
+        self.labber_data_dir = os.path.expanduser(labber_data_dir)
+        os.makedirs(self.labber_data_dir, exist_ok=True)
+
         self.log_name_template = log_name_template
         self.log_cache = {}  # contains logs that are held in memory
 
-    def __getitem__(self, index: int) -> "Optional[Labber.LogFile]":  # not sure of type?
+    def __getitem__(self, index: Union[int, slice])\
+            -> "Optional[Union[Labber.LogFile, List[Labber.LogFile]]]":  # not sure of type?
         # TODO: _really_ think if this is the right way to write this
-        if index < 0:
-            return self.__getitem__(len(self) + index)
-        else:
-            log_path = self.log_path(index)
-            if not os.path.isfile(log_path):
-                raise IndexError('Labber logfile with index {} cannot be found'.format(index))
-            if log_path not in self.log_cache:
-                log_file = Labber.LogFile(self.log_path(index))
-                self.log_cache[log_path] = []
-                for i in range(log_file.getNumberOfEntries()):
-                    self.log_cache[log_path].append(log_file.getEntry(i))
+        if type(index) == int:
+            if index < 0:
+                return self.__getitem__(len(self) + index)
+            else:
+                log_path = self.log_path(index)
+                if not os.path.isfile(log_path):
+                    raise IndexError('Labber logfile with index {} cannot be found'.format(index))
+                if log_path not in self.log_cache:
+                    log_file = Labber.LogFile(self.log_path(index))
+                    self.log_cache[log_path] = []
+                    for i in range(log_file.getNumberOfEntries()):
+                        self.log_cache[log_path].append(log_file.getEntry(i))
 
-            return self.log_cache[log_path]
+                return self.log_cache[log_path]
+        elif type(index) == slice:
+            # TODO is a less naive implementation possible here?
+            # Probably should do some bounds checking, at least.
+            return [self[i] for i in range(index.start, index.stop, index.step)]
+        else:
+            raise TypeError
 
     def __contains__(self, index: int) -> bool:
         """Check whether an index is used"""
@@ -159,7 +170,7 @@ class LogHistory:
             raise StopIteration
 
     def __len__(self) -> int:
-        """Gets the number of extant logfiles."""
+        """Gets the number of extant log files."""
         return sum([(1 if self.is_log(fn) else 0)
                     for fn in os.listdir(self.labber_data_dir)])
 
@@ -170,7 +181,7 @@ class LogHistory:
 
     def log_name(self, index: int) -> str:
         """Gets the log name associated with an index"""
-        return f'_{self.feature_name}_{index}'.join(
+        return f'_{self.feature_id}_{index}'.join(
             os.path.splitext(self.log_name_template))
 
     def log_path(self, index: int) -> str:
@@ -181,8 +192,7 @@ class LogHistory:
         """Gets the index of a filename if it is an output log name, or None if
         it is not."""
         root, ext = os.path.splitext(self.log_name_template)
-        # pattern = '^' + root + '_' + self.feature_name + '_(\d+)' + ext + '$'
-        pattern = f'^{root}_{self.feature_name}_(\\d+){ext}$'
+        pattern = f'^{root}_{self.feature_id}_(\\d+){ext}$'
         m = re.search(pattern, file_name)
         return int(m.groups()[0]) if m else None
 
@@ -207,16 +217,16 @@ class LabberFeature(Feature):
     """
 
     # Deserialized template file
-    template = DictField(default={})
-    template_diffs = DictField(default={})
+    template = me.DictField(default={})
+    template_diffs = me.DictField(default={})
     # TODO note Mongodb docs on performance of ReferenceFields
-    results = ListField(DictField(), default=list)
+    results = me.ListField(me.DictField(), default=list)
     template_file_path = ''
     output_file_path = ''
 
     def __init__(self, labber_client=default_client, **kwargs):
-        if default_client:
-            self.labber_client = default_client
+        if labber_client:
+            self.labber_client = labber_client
 
         super().__init__(**kwargs)
         # Check to see if the template file has been saved in the DySART database;
@@ -224,16 +234,17 @@ class LabberFeature(Feature):
         if not self.template:
             self.deserialize_template()
 
-
         # Set nondefault parameters
-        #for kwarg in kwargs:
+        # TODO: use Antti's wrapper code here
+
+        # for kwarg in kwargs:
         #    self.set_value(kwarg, kwargs[kwarg])
 
         # Deprecated by Simon's changes to Labber API?
         self.config = st.MeasurementObject(self.template_file_path,
                                            self.output_file_path)
 
-        self.log_history = LogHistory(self.name,
+        self.log_history = LogHistory(self.id,
                                       conf.config['LABBER_DATA_DIR'],
                                       os.path.split(self.output_file_path)[-1])
 
@@ -307,6 +318,7 @@ class LabberFeature(Feature):
         os.unlink(self.labber_input_file)
 
         # Raw data is now in output_file. Load it into self.data.
+        # TODO do these *do** anything?
         log_name = os.path.split(self.labber_output_file)[-1]
         log_file = Labber.LogFile(self.labber_output_file)
 
@@ -440,12 +452,12 @@ class LabberFeature(Feature):
     def labber_output_file(self, x):
         self.config.sCfgFileOut = x
 
-    def _expired(self, call_record=None):
+    def expired(self, call_record=None):
         """
         Default expiration condition: is there a result?
 
         TODO: introspect in call record history for detailed expiration info.
-        For now, simply checks if there ecists a named output file.
+        For now, simply checks if there exists a named output file.
         """
         return no_recorded_result(self) or self.manual_expiration_switch
 
@@ -456,7 +468,7 @@ class LabberCall(CallRecord):
     """
 
     # should get the max name length on the labber output directory from server
-    log_name = StringField(max_length=MAX_PATH)
+    log_name = me.StringField(max_length=MAX_PATH)
 
     def __init__(self, feature, *args, **kwargs):
         super().__init__(feature, *args, **kwargs)

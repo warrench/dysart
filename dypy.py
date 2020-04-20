@@ -2,35 +2,38 @@
 This module handles startup busywork for the python interpreter,
 in particular configuring connection to other system components.
 
-In this iteration, it both manages the server and acts as a client it, mostly
+In this iteration, it both manages the server and acts as a client to it, mostly
 for development and debugging. In ehe future I anticipate there to be a single
 interactive client.
 
 For the time being, these will receive default configurations (i.e. default
-databaes and Labber instrument servers). In a future 1.0 release, I would
+database and Labber instrument servers). In a future 1.0 release, I would
 like for these configurations to respond to user 'project' settings, so that
 any given user is automatically connected to a durable instance of their
 running physical experiments.
 """
 
-import os
 import builtins
-import importlib.util
+from typing import *
+import os
 
 import mongoengine as me
 
-from toplevel.conf import DYS_PATH, config
+from toplevel.conf import config
 from toplevel.util import start, stop
 from dysart.feature import CallRecord, get_records_by_uid_pre
+import dysart.project
 from dysart.services.dyserver import Dyserver
 import dysart.messages.messages as messages
 
 
 # Prompt
-WELCOME_MESSAGE = """
+__WELCOME_MESSAGE = """
 Welcome to DyPy!
 Please run `dypy_help()` to learn about this shell\'s builtins.
 """
+
+__PROJ = None
 
 # Auto-documentation assistance
 __HELP_FUNCTIONS = []
@@ -49,12 +52,14 @@ def dypy_help():
     for m in __HELP_FUNCTIONS:
         messages.pprint_func(m.__name__, m.__doc__)
 
+
 @_dypy_help
 def quit():
     """Overloads the builtin quit to close all DySART services first.
     """
     stop(dyserver)
     builtins.quit()
+
 
 @_dypy_help
 def record(uid_pre: str) -> CallRecord:
@@ -71,7 +76,6 @@ def record(uid_pre: str) -> CallRecord:
         DoesNotExist: raised if the hash prefix is not found
 
     """
-
     # Normalize the input, even though you nominally only accept `str`
     if type(uid_pre) == bytes:
         uid_pre = uid_pre.decode()
@@ -83,75 +87,102 @@ def record(uid_pre: str) -> CallRecord:
         raise me.DoesNotExist
     return matches[0]
 
-@_dypy_help
-def feature_dag_setup():
-    """Set up a default feature tree, e.g. specified by the DySART config file.
-    Retrieves the project specified by config variable `DEFAULT_PROJ`
-    """
-    try:
-        proj_path = os.path.join(
-            DYS_PATH,
-            config['DEFAULT_PROJ']
-        )
-    except KeyError:
-        return
-    try:
-        proj_module_path = os.path.join(proj_path)
-        proj_spec = importlib.util.spec_from_file_location(
-                        'proj', proj_module_path
-                    )
-        proj = importlib.util.module_from_spec(proj_spec)
-        proj_spec.loader.exec_module(proj)
-        # Get the feature names from the tree
-        feature_names = [name for name in dir(proj)
-                            if isinstance(getattr(proj, name), me.Document)]
-        # And put them in the global namespace
-        globals().update({name: getattr(proj, name) for name in feature_names})
 
-    except Exception as e:
-        print(e)
-        print("could not import feature tree.")
+@_dypy_help
+def set_config_var(name: str, val: Any):
+     """Sets a variable in the config file, overwriting it if it already
+     exists, and creating it if it does not. Config variables are written in
+     all-caps by convention. Like environment variables, these variables are
+     all stringly-typed.
+
+     Args:
+         name (str): The config variable identifier to write to.
+         val (type): The value to write to the variable. Must implement
+         `__str__` or `__repr__`.
+     """
+     config[name] = str(val)
 
 
 @_dypy_help
-def include_feature(feature_class: type, feature_name: str):
-    """Either return an existing document, if one exists, or create a new one and
-    return it.
-
-    Note that this kind of function is deemed unsafe by the mongoengine docs,
-    since MongoDB lacks transactions. This might be an important design
-    consideration, so keep an eye on this.
-
-    The equivalent deprecated mongoengine function is called
-    `get_or_create`.
+def get_config_var(name: str):
+    """Retrieves a variable from the config file.
 
     Args:
-        feature_class (type): The class of the feature to be included.
-        feature_name (str): The name of the feature to be included.
+        name (str): The config variable identifier to read from.
 
     Returns:
-        Feature of type feature_class.
+        The value of the variable specified in `name`.
 
     Raises:
-        MultipleObjectsReturned: if multiple matching objects are found
-        DoesNotExist: if the feature is not found
+        KeyError: if the name is not present in the config file.
+    """
+    return config[name]
+
+
+@_dypy_help
+def get_config_keys():
+    """Retrieves the names of the config variables currently set.
+
+    Returns:
+        List of the currently-set config variables.
+    """
+    return list(config.keys())
+
+
+@_dypy_help
+def load_project(project_path: str = None):
+    """Set up a default feature tree, e.g. specified by the DySART config file.
+    Retrieves the project specified by config variable `DEFAULT_PROJ`
+
+    Args:
+        project_path (str): The path relative to `DYS_PATH` to load. defaults
+        to `DEFAULT_PROJ`.
     """
 
-    try:
-        doc = feature_class.objects.get(name=feature_name)
-    except me.DoesNotExist:
-        doc = feature_class(name=feature_name)
-    except me.MultipleObjectsReturned:
-        # Don't do anything yet; just propagate the exception
-        raise MultipleObjectsReturned
-    return doc
+    # First, remove the current project from the global namespace
+    clear_project()
+
+    if project_path is None:
+        try:
+            # Sanitize paths possibly containing e.g. "~"
+            project_path = os.path.expanduser(config['DEFAULT_PROJ'])
+        except KeyError:
+            report_failure("no default project path specified.")
+            return
+
+    global __PROJ
+    __PROJ = dysart.project.Project(project_path)
+    globals().update(__PROJ.features)
+
+@_dypy_help
+def clear_project():
+    """Un-loads the working project from the global namespace.
+
+    Returns: None
+
+    """
+
+    global __PROJ
+    if __PROJ is not None:
+        for name, feature in __PROJ.features.items():
+            del globals()[name]
+        __PROJ = None
+
+@_dypy_help
+def print_feature_dag():
+    """Print all the features that are currently included.
+    """
+    for name, feature in __PROJ.features.items():
+        if not feature.parents:  # i.e. if it's a root
+            feature.tree()
 
 
 if __name__ == '__main__':
-    messages.cprint(WELCOME_MESSAGE, status='bold')
+    messages.cprint(__WELCOME_MESSAGE, status='bold')
 
     dyserver = Dyserver('dyserver')
     start(dyserver)
     messages.configure_logging(logfile=dyserver.logfile)  # should all be managed by server
 
-    feature_dag_setup()
+    load_project(config['DEFAULT_PROJ'])
+    print_feature_dag()

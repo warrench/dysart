@@ -8,23 +8,24 @@ rationale goes like this: someone---somewhere, somewhen---has to explicitly
 specify the device-property dependency graph. This person (the "user") should be
 protected only from thinking about more than one system layer _at a time_.
 Later on, some other scientist might like to take a far-downstream measurement
-without having to think about _anything_ more than the highest leayer of
+without having to think about _anything_ more than the highest layer defined by
+the last person who touched the system.
 """
 
 import datetime as dt
-from enum import Enum
 from functools import wraps
 import getpass
 import hashlib
 import socket
 import sys
-import time
+from typing import *
 
-from mongoengine import *
+import mongoengine as me
 
 import dysart.messages.messages as messages
 
 CALLRECORD_UID_LEN = 40
+
 
 def refresh(fn):
     """Decorator that flags a method as having dependencies and possibly requiring
@@ -48,7 +49,7 @@ def refresh(fn):
 
     If we access qubit_rabi.pi_time followed by qubit_rabi.pi_2_time, they
     should use the same measurement & fit results, from a single call to the
-    class's update mthod, to return these two values.
+    class's update method, to return these two values.
 
     This is a pretty central feature, and it must be done right. This should be
     a focus of any future code review, so
@@ -79,19 +80,21 @@ def refresh(fn):
                         user=getpass.getuser(),
                         hostname=socket.gethostname()) as record:
 
+            # First run the optional pre-hook, if any
+            pre_hook = getattr(feature, '__pre_hook__', None)
+            if pre_hook is not None:
+                pre_hook(record)
 
             # is_stale tracks whether we need to update this node
             is_stale = False
             # if this call recurses, recurse on ancestors.
             if feature.is_recursive():
-                for parent_key in feature.parents:
+                for parent in feature.parents.values():
                     # Call parent to refresh recursively; increment stack depth
-                    parent_is_stale = feature.parents[parent_key]\
-                                    .touch(initiating_call=record, is_stale=0)
+                    parent_is_stale = parent.touch(initiating_call=record, is_stale=0)
                     is_stale |= parent_is_stale
             # If stale for some other reason, also flag to be updated.
-            feature_expired = feature._expired(call_record=None)
-            is_stale |= feature_expired
+            is_stale |= feature.expired(call_record=None)
             is_stale |= feature.manual_expiration_switch
             # If this line is in a later place, __call__ is called twice. You need
             # to understand why.
@@ -110,6 +113,11 @@ def refresh(fn):
             # Save any changes to the database
             # feature.manual_expiration_switch = False
             feature.save()
+            
+            # Finally, run the optional post-hook, if any
+            post_hook = getattr(feature, '__post_hook__', None)
+            if post_hook is not None:
+                post_hook(record)
 
         # this_call.save()
 
@@ -119,7 +127,7 @@ def refresh(fn):
     return wrapped_fn
 
 
-class Feature(Document):
+class Feature(me.Document):
     """
     Device or component feature class. Each measurement should be implemented
     as an instance of this class.
@@ -132,11 +140,11 @@ class Feature(Document):
     # structure of the payload is pretty constrained, and on top of that I
     # don't really know how it is represented in the database.
     # Hence "data" as a dict blob.
-    name = StringField(default='', required=True, primary_key=True)
-    manual_expiration_switch = BooleanField(default=False)
-    is_stale_func = StringField(max_length=60)
-    refresh_func = StringField(max_length=60)
-    parents = DictField(default={})
+    id = me.StringField(default='', required=True, primary_key=True)
+    manual_expiration_switch = me.BooleanField(default=False)
+    is_stale_func = me.StringField(max_length=60)
+    refresh_func = me.StringField(max_length=60)
+    parent_ids = me.DictField(default={})
 
     def __init__(self, **kwargs):
         # Create a new document
@@ -156,12 +164,11 @@ class Feature(Document):
         """should report its name, most-derived (?) type, parents, and names and
         expiration statuses thereof.
         """
-        s = ''
         # Initialize as object name with type judgment
-        if self._expired():
-            s = messages.cstr(self.name, 'fail')
+        if self.expired():
+            s = messages.cstr('[EXP]', 'fail')
         else:
-            s = messages.cstr(self.name, 'ok')
+            s = messages.cstr('[OK]', 'ok')
         # Descriptor of this feature
         s += '\t: ' + messages.cstr(self.__class__.__name__, 'bold')
         # This feature's status
@@ -175,38 +182,42 @@ class Feature(Document):
         """Draw to the terminal a pretty-printed tree of all this Feature's
         dependents.
         """
-        print(messages.tree(self, lambda obj: obj.parents.values()))
+        print(messages.tree(self, lambda obj: self.parents.values()))
 
     def _properties(self):
         """
-        TODO real get_properties docstring
+        TODO real _properties docstring
         Return a list of all the refresh methods of the feature
         """
         class_dict = self.__class__.__dict__
         return [p for p in class_dict if hasattr(class_dict[p], 'is_refresh') and
                 not p.startswith('_')]  # ignore self._collections
 
-    @property
     def properties(self):
         """
         TODO real properties docstring
+        TODO rename this; it may be confused with the property decorator
         Pretty-print a human-readable description of all the object's property
         methods
         """
-        class_dict = self.__class__.__dict__
         print('')
         for prop in self._properties():
             messages.pprint_func(prop, self.__class__.__dict__[prop].__doc__)
 
-    def _call_records(self) -> list:
-        """Return a list of CallRecords associated with this Feature
-        """
-        return CallRecord.objects(feature=self)
+    def call_records(self, **kwargs) -> list:
+        """Return a list of CallRecords associated with this Feature.
 
-    def call_records(self) -> list:
+        """
+        try:
+            return CallRecord.objects(feature=self, **kwargs)
+        except me.errors.InvalidQueryError as e:
+            # TODO: use a standard error-reporting method in the messages module.
+            print("Invalid call record field: allowedfields are TODO", sys.stderr)
+
+    def pprintt_call_records(self) -> list:
         """Pretty-print a list of CallRecords associated with this Feature
         """
-        for record in self._call_records():
+        for record in self.call_records():
             print(record)
 
     def __call__(self, initiating_call=None, **kwargs):
@@ -231,10 +242,9 @@ class Feature(Document):
         """
         return is_stale
 
-    def _expired(self, call_record=None) -> bool:
+    def expired(self, call_record: "CallRecord" = None) -> object:
         """Check for feature expiration. By default, everything is a twinkie.
         """
-
         return self.manual_expiration_switch
 
     def set_expired(self, is_expired: bool = True) -> None:
@@ -253,27 +263,38 @@ class Feature(Document):
         """
         return True
 
-    def add_parents(self, *new_parents) -> bool:
-        """Insert a dependency into the feature's parents list and write to the
-        database. Can pass a single feature, multiple features as
-        comma-separated parameters, a list of features, a list of list of
-        features, and so on.
+    @property
+    def parents(self):
+        """How parents should be accessed by clients. This property is a mapping
+        from parent keys, which identify the relationship, purpose or intent of a
+        parent object, to the corresponding parent objects.
+
         """
-        for parent in new_parents:
-            # Handle (arbitrarily deeply nested) lists of parents.
-            # This works with explicit type-checking, but it's not the most
-            # pythonic solution in the world. Could be done more canonically
-            # Feature weren't iterable!
-            if isinstance(parent, Feature):
-                if parent not in self.parents:
-                    print("ok, adding a parent!")
-                    self.parents.append(parent)
-            else:
-                self.add_parents(*parent)
+        return {key: self.__get_parent(key) for key in self.parent_ids}
+
+    def __get_parent(self, parent_key):
+        """Returns the parent associated with a parent key. This is an internal
+        method used by the `parents` property.
+
+        """
+        parents = Feature.objects(id=self.parent_ids[parent_key])
+        if len(parents) == 0:
+            # TODO
+            pass
+        if len(parents) > 1:
+            raise me.errors.MultipleObjectsReturned
+        return parents[0]
+
+    def add_parents(self, new_parents: Dict):
+        """Insert dependencies into the feature's parents dictionary and
+        write to the database.
+        """
+        for parent_key, parent_id in new_parents.items():
+            self.parent_ids[parent_key] = parent_id
         self.save()
 
 
-class CallRecord(Document):
+class CallRecord(me.Document):
     """
     TODO CallRecord docstring
 
@@ -297,17 +318,17 @@ class CallRecord(Document):
                      'hostname',
                      'exit_status',]
 
-    initiating_call = ReferenceField('self', null=True)
-    stack_level = IntField(default=0)
-    feature = ReferenceField(Feature, required=True)
-    method = StringField(max_length=80)
-    uid = StringField(default='', max_length=CALLRECORD_UID_LEN, required=True, primary_key=True)
-    start_time = DateTimeField()
-    stop_time = DateTimeField()
-    user = StringField(max_length=255)
-    hostname = StringField(max_length=255)
-    exit_status = StringField(max_length=40, default='DONE')
-    info = StringField(default='')
+    initiating_call = me.ReferenceField('self', null=True)
+    stack_level = me.IntField(default=0)
+    feature = me.ReferenceField(Feature, required=True)
+    method = me.StringField(max_length=80)
+    uid = me.StringField(default='', max_length=CALLRECORD_UID_LEN, required=True, primary_key=True)
+    start_time = me.DateTimeField()
+    stop_time = me.DateTimeField()
+    user = me.StringField(max_length=255)
+    hostname = me.StringField(max_length=255)
+    exit_status = me.StringField(max_length=40, default='DONE')
+    info = me.StringField(default='')
 
     def __init__(self, *args, **kwargs):
         """To create a CallRecord, should receive `feature` and `initiating_call`
@@ -320,7 +341,7 @@ class CallRecord(Document):
 
         # Generate a uid
         # TODO maybe this should be a hash of the called feature's state
-        h = hashlib.sha1(self.feature.name.encode('utf-8'))
+        h = hashlib.sha1(self.feature.id.encode('utf-8'))
         h.update(str(self.start_time).encode('utf-8'))
         if self.initiating_call:
             h.update(self.initiating_call.uid.encode('utf-8'))
@@ -333,6 +354,7 @@ class CallRecord(Document):
         Redirects stdout: but note inheriting from contextlib.redirect_stdout
         causes a metaclass conflict.
         """
+        # TODO I'm not really sure this should divert stdout.
         self.__old_stdout = sys.stdout
         sys.stdout = self
         self.start_time = dt.datetime.now()
@@ -346,6 +368,7 @@ class CallRecord(Document):
         else:
             self.exit_status = CallRecord.DONE
 
+        # TODO I'm not really sure this should divert stdout.
         sys.stdout = self.__old_stdout
         self.save()
 
@@ -365,9 +388,9 @@ class CallRecord(Document):
             max_attr_len = max(map(len, CallRecord.printed_attrs))
             val = getattr(self, attr)
             if isinstance(val, Feature):
-                val = val.name
+                val = val.id
             s += ' ' + messages.cstr(attr, 'italic') + ' ' * (max_attr_len - len(attr))\
-                    + ' : {}\n'.format(val)
+                     + ' : {}\n'.format(val)
         return s
 
     def get_initiated_call(self, other_feature):
@@ -390,6 +413,7 @@ def get_records_by_uid_pre(uid_pre):
     """
     matches = CallRecord.objects(uid__istartswith=uid_pre)
     return matches
+
 
 def get_records_by_uid_sub(uid_sub):
     """Takes a uid /sub/string and searches for a record whose uid contains this

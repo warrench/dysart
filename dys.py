@@ -54,7 +54,6 @@ if __name__ == '__main__':
                         help='the dys command to run')
 
     args = parser.parse_args()
-    services = {} #OrderedDict([('database', Database())])
-                            # ('dyserver', Dyserver())])
+    services = {}
     exit_code = run_command(services)
     exit(exit_code)
