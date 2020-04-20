@@ -15,8 +15,8 @@ class Project:
     """
 
     def __init__(self, project_path: str):
-        self.path = project_path
-        with open(os.path.expanduser(self.path), 'r') as f:
+        self.path = os.path.expanduser(project_path)
+        with open(self.path, 'r') as f:
             try:
                 proj_yaml = yaml.load(f, yaml.Loader)
             except FileNotFoundError:
@@ -53,7 +53,14 @@ class Project:
     def load_feature_module(self, mod_path: str):
         """Imports a single Dysart feature library into this Project's
         """
+        # normalize the path, first by expanding homedirs...
         mod_path = os.path.expanduser(mod_path)
+        # ...then by completing paths relative to the .yaml file
+        if not os.path.isabs(mod_path):
+            mod_path = os.path.join(
+                os.path.dirname(self.path), mod_path
+            )
+
         module_name = os.path.splitext(os.path.basename(mod_path))[0]
         spec = importlib.util.spec_from_file_location(
             module_name, mod_path

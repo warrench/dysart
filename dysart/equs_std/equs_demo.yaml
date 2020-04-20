@@ -8,7 +8,7 @@ Name: equs_demo
 # such as libraries of fitting functions, validity contracts, etc.
 # This section should be bulleted with hyphen characters
 Modules:
-  - ~/equs/QMIT/dysart/dysart/equs_std/equs_features.py
+  - equs_features.py
 
 # The features defining the dependency tree in the project.
 # These simple qubit properties will probably, in the future, be rolled
