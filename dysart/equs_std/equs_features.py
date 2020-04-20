@@ -6,14 +6,16 @@ from dysart.feature import *
 from dysart.labber.labber_feature import LabberFeature, result
 from dysart.equs_std.fitting import spectra, rabi
 from dysart.messages.messages import logged
+import dysart.hooks.slack as slack
 from dysart.services.streams import stdimg, stdmsg, stdfit
 
 # TODO clean up the way these are handled
-__dir_path = os.path.dirname(os.path.realpath(__file__))
-qubit_rabi_file = os.path.join(__dir_path, 'qubit_rabi.json')
-qubit_rabi_file_out = os.path.join(__dir_path, 'qubit_rabi_out.hdf5')
-qubit_spec_file = os.path.join(__dir_path, 'qubit_spec.json')
-qubit_spec_file_out = os.path.join(__dir_path, 'qubit_spec_out.hdf5')
+template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                             'templates')
+qubit_rabi_file = os.path.join(template_path, 'qubit_rabi.json')
+qubit_rabi_file_out = os.path.join(template_path, 'qubit_rabi_out.hdf5')
+qubit_spec_file = os.path.join(template_path, 'qubit_spec.json')
+qubit_spec_file_out = os.path.join(template_path, 'qubit_spec_out.hdf5')
 
 class ResonatorSpectrum(LabberFeature):
     pass
@@ -32,6 +34,10 @@ class QubitSpectrum(LabberFeature):
     At the moment, there are a number of ugly hard-coded constants. As soon as
     this _works_, start fixing that first.
     """
+
+    __pre_hook__ = None
+    __post_hook__ = None
+
     call_message = 'measuring qubit spectrum...'
     template_file_path = StringField(default=qubit_spec_file)
     output_file_path = StringField(default=qubit_spec_file_out)
@@ -80,6 +86,9 @@ class QubitRabi(LabberFeature):
     """
     Feature object for a Rabi measurement on a qubit.
     """
+
+    __pre_hook__ = None
+    __post_hook__ = None
 
     call_message = 'measuring qubit rabi'
     template_file_path = StringField(default=qubit_rabi_file)

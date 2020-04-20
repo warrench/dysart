@@ -20,7 +20,7 @@ import socket
 import sys
 from typing import *
 
-from mongoengine import *
+import mongoengine as me
 
 import dysart.messages.messages as messages
 
@@ -49,7 +49,7 @@ def refresh(fn):
 
     If we access qubit_rabi.pi_time followed by qubit_rabi.pi_2_time, they
     should use the same measurement & fit results, from a single call to the
-    class's update mthod, to return these two values.
+    class's update method, to return these two values.
 
     This is a pretty central feature, and it must be done right. This should be
     a focus of any future code review, so
@@ -80,6 +80,11 @@ def refresh(fn):
                         user=getpass.getuser(),
                         hostname=socket.gethostname()) as record:
 
+            # First run the optional pre-hook, if any
+            pre_hook = getattr(feature, '__pre_hook__', None)
+            if pre_hook is not None:
+                pre_hook(record)
+
             # is_stale tracks whether we need to update this node
             is_stale = False
             # if this call recurses, recurse on ancestors.
@@ -108,6 +113,11 @@ def refresh(fn):
             # Save any changes to the database
             # feature.manual_expiration_switch = False
             feature.save()
+            
+            # Finally, run the optional post-hook, if any
+            post_hook = getattr(feature, '__post_hook__', None)
+            if post_hook is not None:
+                post_hook(record)
 
         # this_call.save()
 
@@ -117,7 +127,7 @@ def refresh(fn):
     return wrapped_fn
 
 
-class Feature(Document):
+class Feature(me.Document):
     """
     Device or component feature class. Each measurement should be implemented
     as an instance of this class.
@@ -130,11 +140,11 @@ class Feature(Document):
     # structure of the payload is pretty constrained, and on top of that I
     # don't really know how it is represented in the database.
     # Hence "data" as a dict blob.
-    id = StringField(default='', required=True, primary_key=True)
-    manual_expiration_switch = BooleanField(default=False)
-    is_stale_func = StringField(max_length=60)
-    refresh_func = StringField(max_length=60)
-    parent_ids = DictField(default={})
+    id = me.StringField(default='', required=True, primary_key=True)
+    manual_expiration_switch = me.BooleanField(default=False)
+    is_stale_func = me.StringField(max_length=60)
+    refresh_func = me.StringField(max_length=60)
+    parent_ids = me.DictField(default={})
 
     def __init__(self, **kwargs):
         # Create a new document
@@ -176,34 +186,38 @@ class Feature(Document):
 
     def _properties(self):
         """
-        TODO real get_properties docstring
+        TODO real _properties docstring
         Return a list of all the refresh methods of the feature
         """
         class_dict = self.__class__.__dict__
         return [p for p in class_dict if hasattr(class_dict[p], 'is_refresh') and
                 not p.startswith('_')]  # ignore self._collections
 
-    @property
     def properties(self):
         """
         TODO real properties docstring
+        TODO rename this; it may be confused with the property decorator
         Pretty-print a human-readable description of all the object's property
         methods
         """
-        class_dict = self.__class__.__dict__
         print('')
         for prop in self._properties():
             messages.pprint_func(prop, self.__class__.__dict__[prop].__doc__)
 
-    def _call_records(self) -> list:
-        """Return a list of CallRecords associated with this Feature
-        """
-        return CallRecord.objects(feature=self)
+    def call_records(self, **kwargs) -> list:
+        """Return a list of CallRecords associated with this Feature.
 
-    def call_records(self) -> list:
+        """
+        try:
+            return CallRecord.objects(feature=self, **kwargs)
+        except me.errors.InvalidQueryError as e:
+            # TODO: use a standard error-reporting method in the messages module.
+            print("Invalid call record field: allowedfields are TODO", sys.stderr)
+
+    def pprintt_call_records(self) -> list:
         """Pretty-print a list of CallRecords associated with this Feature
         """
-        for record in self._call_records():
+        for record in self.call_records():
             print(record)
 
     def __call__(self, initiating_call=None, **kwargs):
@@ -268,7 +282,7 @@ class Feature(Document):
             # TODO
             pass
         if len(parents) > 1:
-            raise MultipleObjectsReturned
+            raise me.errors.MultipleObjectsReturned
         return parents[0]
 
     def add_parents(self, new_parents: Dict):
@@ -280,7 +294,7 @@ class Feature(Document):
         self.save()
 
 
-class CallRecord(Document):
+class CallRecord(me.Document):
     """
     TODO CallRecord docstring
 
@@ -304,17 +318,17 @@ class CallRecord(Document):
                      'hostname',
                      'exit_status',]
 
-    initiating_call = ReferenceField('self', null=True)
-    stack_level = IntField(default=0)
-    feature = ReferenceField(Feature, required=True)
-    method = StringField(max_length=80)
-    uid = StringField(default='', max_length=CALLRECORD_UID_LEN, required=True, primary_key=True)
-    start_time = DateTimeField()
-    stop_time = DateTimeField()
-    user = StringField(max_length=255)
-    hostname = StringField(max_length=255)
-    exit_status = StringField(max_length=40, default='DONE')
-    info = StringField(default='')
+    initiating_call = me.ReferenceField('self', null=True)
+    stack_level = me.IntField(default=0)
+    feature = me.ReferenceField(Feature, required=True)
+    method = me.StringField(max_length=80)
+    uid = me.StringField(default='', max_length=CALLRECORD_UID_LEN, required=True, primary_key=True)
+    start_time = me.DateTimeField()
+    stop_time = me.DateTimeField()
+    user = me.StringField(max_length=255)
+    hostname = me.StringField(max_length=255)
+    exit_status = me.StringField(max_length=40, default='DONE')
+    info = me.StringField(default='')
 
     def __init__(self, *args, **kwargs):
         """To create a CallRecord, should receive `feature` and `initiating_call`
@@ -340,6 +354,7 @@ class CallRecord(Document):
         Redirects stdout: but note inheriting from contextlib.redirect_stdout
         causes a metaclass conflict.
         """
+        # TODO I'm not really sure this should divert stdout.
         self.__old_stdout = sys.stdout
         sys.stdout = self
         self.start_time = dt.datetime.now()
@@ -353,6 +368,7 @@ class CallRecord(Document):
         else:
             self.exit_status = CallRecord.DONE
 
+        # TODO I'm not really sure this should divert stdout.
         sys.stdout = self.__old_stdout
         self.save()
 

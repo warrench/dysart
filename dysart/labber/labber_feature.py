@@ -17,7 +17,7 @@ import tempfile
 from typing import List, Optional, Callable, Union
 
 import numpy as np
-from mongoengine import *
+import mongoengine as me
 import Labber
 from Labber import ScriptTools as st
 
@@ -217,10 +217,10 @@ class LabberFeature(Feature):
     """
 
     # Deserialized template file
-    template = DictField(default={})
-    template_diffs = DictField(default={})
+    template = me.DictField(default={})
+    template_diffs = me.DictField(default={})
     # TODO note Mongodb docs on performance of ReferenceFields
-    results = ListField(DictField(), default=list)
+    results = me.ListField(me.DictField(), default=list)
     template_file_path = ''
     output_file_path = ''
 
@@ -468,7 +468,7 @@ class LabberCall(CallRecord):
     """
 
     # should get the max name length on the labber output directory from server
-    log_name = StringField(max_length=MAX_PATH)
+    log_name = me.StringField(max_length=MAX_PATH)
 
     def __init__(self, feature, *args, **kwargs):
         super().__init__(feature, *args, **kwargs)

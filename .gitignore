@@ -1,5 +1,8 @@
 ### added by me ###
 
+# Config file, which may e.g. contain API keys
+.dysart.conf
+
 # Mac stuff
 .DS_Store
 
@@ -9,10 +12,14 @@
 # Labber scenarios
 *_out.hdf5
 
+
 # Vscode things
 .Vscode
 .vscode
 settings.json
+
+# PyCharm things
+.idea
 
 # Personal todo files
 *.org
