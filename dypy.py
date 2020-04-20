@@ -144,7 +144,8 @@ def load_project(project_path: str = None):
 
     if project_path is None:
         try:
-            project_path = os.path.join(config['DYS_PATH'], config['DEFAULT_PROJ'])
+            # Sanitize paths possibly containing e.g. "~"
+            project_path = os.path.expanduser(config['DEFAULT_PROJ'])
         except KeyError:
             report_failure("no default project path specified.")
             return

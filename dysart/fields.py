@@ -6,7 +6,7 @@ ideas, please let me know.
 """
 
 from numpy import complex_
-from mongoengine import *
+import mongoengine as me
 
 class complex_m_(me.Document):
 

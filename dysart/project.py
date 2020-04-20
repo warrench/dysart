@@ -1,13 +1,12 @@
-from typing import Optional, Dict
+from typing import Dict
 import importlib.util
 import os
 import sys
-import yaml
 
-from toplevel.conf import config
 from dysart.messages.errors import ValidationError
 
 import mongoengine as me
+import yaml
 
 
 class Project:
@@ -17,7 +16,7 @@ class Project:
 
     def __init__(self, project_path: str):
         self.path = project_path
-        with open(self.path, 'r') as f:
+        with open(os.path.expanduser(self.path), 'r') as f:
             try:
                 proj_yaml = yaml.load(f, yaml.Loader)
             except FileNotFoundError:
@@ -54,6 +53,7 @@ class Project:
     def load_feature_module(self, mod_path: str):
         """Imports a single Dysart feature library into this Project's
         """
+        mod_path = os.path.expanduser(mod_path)
         module_name = os.path.splitext(os.path.basename(mod_path))[0]
         spec = importlib.util.spec_from_file_location(
             module_name, mod_path

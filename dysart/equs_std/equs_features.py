@@ -1,21 +1,19 @@
-import json
+import os
 
 from mongoengine import *
-import Labber
-from Labber import ScriptTools
-from uncertainties import ufloat  # Return values with error bars!
-from uncertainties.umath import *
-import pint  # Units package
 
 from dysart.feature import *
 from dysart.labber.labber_feature import LabberFeature, result
-from dysart.equs_std import measurements as meas
 from dysart.equs_std.fitting import spectra, rabi
 from dysart.messages.messages import logged
 from dysart.services.streams import stdimg, stdmsg, stdfit
 
-ureg = pint.UnitRegistry()
-
+# TODO clean up the way these are handled
+__dir_path = os.path.dirname(os.path.realpath(__file__))
+qubit_rabi_file = os.path.join(__dir_path, 'qubit_rabi.json')
+qubit_rabi_file_out = os.path.join(__dir_path, 'qubit_rabi_out.hdf5')
+qubit_spec_file = os.path.join(__dir_path, 'qubit_spec.json')
+qubit_spec_file_out = os.path.join(__dir_path, 'qubit_spec_out.hdf5')
 
 class ResonatorSpectrum(LabberFeature):
     pass
@@ -35,8 +33,8 @@ class QubitSpectrum(LabberFeature):
     this _works_, start fixing that first.
     """
     call_message = 'measuring qubit spectrum...'
-    template_file_path = StringField(default=meas.qubit_spec_file)
-    output_file_path = StringField(default=meas.qubit_spec_file_out)
+    template_file_path = StringField(default=qubit_spec_file)
+    output_file_path = StringField(default=qubit_spec_file_out)
 
     # Instrument names: hardcoded for now.
     pulse_generator = StringField(default='Multi-Qubit Pulse Generator - ')
@@ -84,8 +82,8 @@ class QubitRabi(LabberFeature):
     """
 
     call_message = 'measuring qubit rabi'
-    template_file_path = StringField(default=meas.qubit_rabi_file)
-    output_file_path = StringField(default=meas.qubit_rabi_file_out)
+    template_file_path = StringField(default=qubit_rabi_file)
+    output_file_path = StringField(default=qubit_rabi_file_out)
 
     # Instrument names: hardcoded for now.
     pulse_generator = StringField(

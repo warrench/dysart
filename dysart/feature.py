@@ -8,7 +8,8 @@ rationale goes like this: someone---somewhere, somewhen---has to explicitly
 specify the device-property dependency graph. This person (the "user") should be
 protected only from thinking about more than one system layer _at a time_.
 Later on, some other scientist might like to take a far-downstream measurement
-without having to think about _anything_ more than the highest leayer of
+without having to think about _anything_ more than the highest layer defined by
+the last person who touched the system.
 """
 
 import datetime as dt
@@ -24,6 +25,7 @@ from mongoengine import *
 import dysart.messages.messages as messages
 
 CALLRECORD_UID_LEN = 40
+
 
 def refresh(fn):
     """Decorator that flags a method as having dependencies and possibly requiring
@@ -78,7 +80,6 @@ def refresh(fn):
                         user=getpass.getuser(),
                         hostname=socket.gethostname()) as record:
 
-
             # is_stale tracks whether we need to update this node
             is_stale = False
             # if this call recurses, recurse on ancestors.
@@ -88,8 +89,7 @@ def refresh(fn):
                     parent_is_stale = parent.touch(initiating_call=record, is_stale=0)
                     is_stale |= parent_is_stale
             # If stale for some other reason, also flag to be updated.
-            feature_expired = feature._expired(call_record=None)
-            is_stale |= feature_expired
+            is_stale |= feature.expired(call_record=None)
             is_stale |= feature.manual_expiration_switch
             # If this line is in a later place, __call__ is called twice. You need
             # to understand why.
@@ -155,7 +155,7 @@ class Feature(Document):
         expiration statuses thereof.
         """
         # Initialize as object name with type judgment
-        if self._expired():
+        if self.expired():
             s = messages.cstr('[EXP]', 'fail')
         else:
             s = messages.cstr('[OK]', 'ok')
@@ -228,10 +228,9 @@ class Feature(Document):
         """
         return is_stale
 
-    def _expired(self, call_record=None) -> bool:
+    def expired(self, call_record: "CallRecord" = None) -> object:
         """Check for feature expiration. By default, everything is a twinkie.
         """
-
         return self.manual_expiration_switch
 
     def set_expired(self, is_expired: bool = True) -> None:
@@ -375,7 +374,7 @@ class CallRecord(Document):
             if isinstance(val, Feature):
                 val = val.id
             s += ' ' + messages.cstr(attr, 'italic') + ' ' * (max_attr_len - len(attr))\
-                    + ' : {}\n'.format(val)
+                     + ' : {}\n'.format(val)
         return s
 
     def get_initiated_call(self, other_feature):
@@ -398,6 +397,7 @@ def get_records_by_uid_pre(uid_pre):
     """
     matches = CallRecord.objects(uid__istartswith=uid_pre)
     return matches
+
 
 def get_records_by_uid_sub(uid_sub):
     """Takes a uid /sub/string and searches for a record whose uid contains this
