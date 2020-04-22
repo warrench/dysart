@@ -9,6 +9,10 @@ class ValidationError(DysartError):
     pass
 
 
+class ModuleNotFoundError(DysartError):
+    pass
+
+
 class ServiceError(DysartError):
     pass
 

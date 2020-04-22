@@ -35,9 +35,6 @@ class QubitSpectrum(LabberFeature):
     this _works_, start fixing that first.
     """
 
-    __pre_hook__ = None
-    __post_hook__ = None
-
     call_message = 'measuring qubit spectrum...'
     template_file_path = StringField(default=qubit_spec_file)
     output_file_path = StringField(default=qubit_spec_file_out)
@@ -86,9 +83,6 @@ class QubitRabi(LabberFeature):
     """
     Feature object for a Rabi measurement on a qubit.
     """
-
-    __pre_hook__ = None
-    __post_hook__ = None
 
     call_message = 'measuring qubit rabi'
     template_file_path = StringField(default=qubit_rabi_file)

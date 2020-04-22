@@ -264,7 +264,6 @@ class LabberFeature(Feature):
         """Pretty-prints a list of all the methods of this class annotated with
         @result
         """
-        class_dict = self.__class__.__dict__
         print('')
         for m in self._result_methods():
             messages.pprint_func(m.__name__, m.__doc__)
