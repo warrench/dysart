@@ -3,6 +3,7 @@ from typing import List
 import toplevel.conf as conf
 from dysart.hooks.hooks import pre_hook, post_hook
 from dysart.feature import CallRecord
+import dysart.messages.messages as messages
 
 from slack import WebClient
 from slack.errors import SlackApiError
@@ -12,7 +13,8 @@ client = WebClient(token=conf.config['SLACK_API_TOKEN'])
 def to_channel(channel: str):
     @post_hook
     def hook(record: CallRecord):
-        text = record_message(record)
+        with messages.FormatContext('slack'):
+            text = record_message(record)
         try:
             response = client.chat_postMessage(
                 channel=channel,
@@ -43,8 +45,8 @@ def to_users(*users: List[str]):
 
     @post_hook
     def hook(record: CallRecord):
-        breakpoint()
-        text = record_message(record)
+        with messages.FormatContext('slack'):
+            text = record_message(record)
         try:
             response = client.chat_postMessage(
                 channel=channel_id,
@@ -57,7 +59,8 @@ def to_users(*users: List[str]):
     return hook
 
 def record_message(record: CallRecord) -> str:
-    return """A user has just completed a measurement or query,
+    return f"""A user has just completed a measurement or query,
     resulting in the following call record:
-    ```{record}``` 
+
+    {record}
     """
