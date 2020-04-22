@@ -26,7 +26,6 @@ import dysart.messages.messages as messages
 
 CALLRECORD_UID_LEN = 40
 
-
 def refresh(fn):
     """Decorator that flags a method as having dependencies and possibly requiring
     a refresh operation. Recursively refreshes ancestors, then checks an
@@ -73,56 +72,65 @@ def refresh(fn):
             stack_level = 0
 
         # And create the new call record.
-        with CallRecord(feature=feature,
-                        method=fn.__name__,
-                        initiating_call=initiating_call,
-                        stack_level=stack_level,
-                        user=getpass.getuser(),
-                        hostname=socket.gethostname()) as record:
+        record = CallRecord(
+            feature=feature,
+            method=fn.__name__,
+            initiating_call=initiating_call,
+            stack_level=stack_level,
+            user=getpass.getuser(),
+            hostname=socket.gethostname()
+        ) 
 
-            # First run the optional pre-hook, if any
-            pre_hook = getattr(feature, '__pre_hook__', None)
-            if pre_hook is not None:
-                pre_hook(record)
+        record.start_time = dt.datetime.now()
 
-            # is_stale tracks whether we need to update this node
-            is_stale = False
-            # if this call recurses, recurse on ancestors.
-            if feature.is_recursive():
-                for parent in feature.parents.values():
-                    # Call parent to refresh recursively; increment stack depth
-                    parent_is_stale = parent.touch(initiating_call=record, is_stale=0)
-                    is_stale |= parent_is_stale
-            # If stale for some other reason, also flag to be updated.
-            is_stale |= feature.expired(call_record=None)
-            is_stale |= feature.manual_expiration_switch
-            # If this line is in a later place, __call__ is called twice. You need
-            # to understand why.
-            feature.manual_expiration_switch = False
-            # Call the update-self method, the reason for this wrapper's existence
-            if is_stale:
-                feature(initiating_call=initiating_call)
-            # Update staleness parameter in case it was passed in with the function
-            # TODO: this currently only exists for the benefit of Feature.touch().
-            # If that method is removed, consider getting rid of this snippet, too.
-            if 'is_stale' in kwargs:
-                kwargs['is_stale'] = is_stale
+        # First run the optional pre-hook, if any
+        pre_hook = getattr(feature, '__pre_hook__', None)
+        if pre_hook is not None:
+            pre_hook(record)
 
-            # Call the requested function!
-            return_value = fn(*args, **kwargs)
-            # Save any changes to the database
-            # feature.manual_expiration_switch = False
-            feature.save()
+        # TODO: factor this chunk out
+        # is_stale tracks whether we need to update this node
+        is_stale = False
+        # if this call recurses, recurse on ancestors.
+        if feature.is_recursive():
+            for parent in feature.parents.values():
+                # Call parent to refresh recursively; increment stack depth
+                parent_is_stale = parent.touch(initiating_call=record, is_stale=0)
+                is_stale |= parent_is_stale
+        # If stale for some other reason, also flag to be updated.
+        is_stale |= feature.expired(call_record=None)
+        is_stale |= feature.manual_expiration_switch
+        # If this line is in a later place, __call__ is called twice. You need
+        # to understand why.
+        feature.manual_expiration_switch = False
+
+        # Call the update-self method, the reason for this wrapper's existence
+        if is_stale:
+            feature(initiating_call=initiating_call)
+
+        # Update staleness parameter in case it was passed in with the function
+        # TODO: this currently only exists for the benefit of Feature.touch().
+        # If that method is removed, consider getting rid of this snippet, too.
+        if 'is_stale' in kwargs:
+            kwargs['is_stale'] = is_stale
+
+        # Call the requested function!
+        return_value = fn(*args, **kwargs)
+        # Save any changes to the database
+        # feature.manual_expiration_switch = False
+        feature.save()
+        
+        # Finally, run the optional post-hook, if any
+        post_hook = getattr(feature, '__post_hook__', None)
+        if post_hook is not None:
+            post_hook(record)
             
-            # Finally, run the optional post-hook, if any
-            post_hook = getattr(feature, '__post_hook__', None)
-            if post_hook is not None:
-                post_hook(record)
-
-        # this_call.save()
+        record.stop_time = dt.datetime.now()
+        record.save()
 
         # Finally, pass along return value of fn
         return return_value
+    
     wrapped_fn.is_refresh = True
     return wrapped_fn
 
@@ -327,7 +335,7 @@ class CallRecord(me.Document):
     stop_time = me.DateTimeField()
     user = me.StringField(max_length=255)
     hostname = me.StringField(max_length=255)
-    exit_status = me.StringField(max_length=40, default='DONE')
+    exit_status = me.StringField(max_length=12, default='DONE')
     info = me.StringField(default='')
 
     def __init__(self, *args, **kwargs):
@@ -348,39 +356,6 @@ class CallRecord(me.Document):
         self.uid = h.hexdigest()[:CALLRECORD_UID_LEN]
 
         self.save()
-
-    def __enter__(self):
-        """Note use of CallRecord as a context manager for refresh function.
-        Redirects stdout: but note inheriting from contextlib.redirect_stdout
-        causes a metaclass conflict.
-        """
-        # TODO I'm not really sure this should divert stdout.
-        self.__old_stdout = sys.stdout
-        sys.stdout = self
-        self.start_time = dt.datetime.now()
-        self.save()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.stop_time = dt.datetime.now()
-        if exc_type is not None:
-            self.exit_status = '{}: {}'.format(CallRecord.FAILED, exc_value)
-        else:
-            self.exit_status = CallRecord.DONE
-
-        # TODO I'm not really sure this should divert stdout.
-        sys.stdout = self.__old_stdout
-        self.save()
-
-    def write(self, data: str):
-        """TODO docstring
-        """
-        self.info += data
-
-    def flush(self):
-        """TODO docstring
-        """
-        pass
 
     def __str__(self):
         s = self.uid[:16] + '...\n'

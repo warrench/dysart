@@ -22,23 +22,6 @@ DEFAULT_COL = 48
 TAB = ' ' * 4
 
 
-def pprint_func(name: str, doc: str) -> None:
-    """
-    TODO real docstring for pprint_property
-    Takes a name and docstring of a function and formats and pretty-prints them.
-    """
-    if doc is None:
-        return
-    # Number of columns in the formatted docscring
-    status_col = int(conf.config.get('STATUS_COL') or DEFAULT_COL)
-    # Prepare the docstring: fix up whitespace for display
-    doc = ' '.join(doc.strip().split())
-    # Prepare the docstring: wrap it and indent it
-    doc = '\t' + '\n\t'.join(textwrap.wrap(doc, status_col))
-    # Finally, print the result
-    print(cstr(name, status='bold') + '\n' + cstr(doc, status='italic') + '\n')
-
-
 class Bcolor:
     """
     Enum for colored printing
@@ -76,6 +59,7 @@ def cstr_ansi(s: str, status: str = 'normal') -> str:
         return Bcolor.UNDERLINE + s + Bcolor.ENDC
     else:
         return s
+
 
 def cstr_slack(s: str, status: str = 'normal') -> str:
     """
@@ -262,6 +246,8 @@ def tree(obj, get_deps: callable, pipe='│', dash='─', tee='├',
         subtree = tree(dep, get_deps, prefix=new_prefix)
         s += ('\n' + new_prefix).join(subtree.split('\n'))
     return s
+
+
 def pprint_func(name: str, doc: str) -> None:
     """
     TODO real docstring for pprint_property
@@ -277,188 +263,6 @@ def pprint_func(name: str, doc: str) -> None:
     doc = '\t' + '\n\t'.join(textwrap.wrap(doc, status_col))
     # Finally, print the result
     print(cstr(name, status='bold') + '\n' + cstr(doc, status='italic') + '\n')
-
-
-def cstr_ansi(s: str, status: str = 'normal') -> str:
-    """
-    Wrap a string with ANSI color annotations
-    TODO there's a package for this; you can rip this out.
-    """
-    if platform.system() == 'Windows':
-        return s  # ANSI colors unsupported on Windows
-
-    if status == 'ok':
-        return Bcolor.OKGREEN + s + Bcolor.ENDC
-    elif status == 'fail':
-        return Bcolor.FAIL + s + Bcolor.ENDC
-    elif status == 'warn':
-        return Bcolor.WARNING + s + Bcolor.ENDC
-    elif status == 'bold':
-        return Bcolor.BOLD + s + Bcolor.ENDC
-    elif status == 'italic':
-        return Bcolor.ITALIC + s + Bcolor.ENDC
-    elif status == 'underline':
-        return Bcolor.UNDERLINE + s + Bcolor.ENDC
-    else:
-        return s
-
-def cstr_slack(s: str, status: str = 'normal') -> str:
-    """
-    Wrap a string with ANSI color annotations
-    TODO there's a package for this; you can rip this out.
-    """
-    if platform.system() == 'Windows':
-        return s  # ANSI colors unsupported on Windows
-
-    if status == 'ok':
-        return Bcolor.OKGREEN + s + Bcolor.ENDC
-    elif status == 'fail':
-        return Bcolor.FAIL + s + Bcolor.ENDC
-    elif status == 'warn':
-        return Bcolor.WARNING + s + Bcolor.ENDC
-    elif status == 'bold':
-        return Bcolor.BOLD + s + Bcolor.ENDC
-    elif status == 'italic':
-        return Bcolor.ITALIC + s + Bcolor.ENDC
-    elif status == 'underline':
-        return Bcolor.UNDERLINE + s + Bcolor.ENDC
-    else:
-        return s
-
-
-def cprint(s: str, status: str = 'normal', **kwargs):
-    """
-    Print a string with ANSI color annotations
-    """
-    print(cstr(s, status), **kwargs)
-
-
-def msg1(message: str, level=0, end="\n"):
-    """
-    Print a formatted message to stdout.
-    Accepts an optional level parameter, which is useful when you might wish
-    to log a stack trace.
-    """
-    prompt = '=> '
-    indent = '   '
-    output = level * indent + prompt + message
-    print(output, end=end)
-
-
-def msg2(message: str, level=0, end="\n"):
-    """
-    Print a formatted message to stdout.
-    Accepts an optional level parameter, which is useful when you might wish
-    to log a stack trace.
-    """
-    prompt = '-> '
-    indent = '   '
-    output = level * indent + prompt + message
-    print(output, end=end)
-
-
-def write_log(message: str):
-    """
-    Write a message to a log file with date and time information.
-    """
-    logging.info(message)
-
-
-def logged(stdout=True, message='log event', **kwargs):
-    """
-    Decorator for handling log messages. By default, writes to a default log
-    file in the debug_data database directory, and prints output to stdout.
-    Passes level parameter in decorated function to message functions to
-    """
-    # set terminator for log message
-    term = "\n"
-    if 'end' in kwargs:
-        term = kwargs['end']
-
-    def decorator(fn):
-        @wraps(fn)
-        def wrapped(*args_inner, **kwargs_inner):
-            if stdout:
-                if 'level' in kwargs_inner:
-                    lvl = kwargs_inner['level']
-                else:
-                    lvl = 0
-                msg1(message, level=lvl, end=term)
-
-            # Check if this was called as a method of an object and, if so,
-            # intercept the message to reflect this.
-            # TODO: this could done much better with a log-entry object that
-            # receives attributes like 'caller', etc., and is then formatted
-            # independently.
-            msg_prefix = ''
-            spec = inspect.getargspec(fn)
-            if spec.args and spec.args[0] == 'self':
-                # TODO: note that this isn't really airtight. It is not a rule
-                # of the syntax that argument 0 must be called 'self' for a
-                # class method.
-                caller = args_inner[0]
-                msg_prefix = caller.name + ' | '
-
-            # write log message
-            write_log(msg_prefix + message)
-            # call the original function
-            return_value = fn(*args_inner, **kwargs_inner)
-            # post-call operations
-            # ...
-            # finally, return whatever fn would have returned!
-            return return_value
-        return wrapped
-    return decorator
-
-
-def configure_logging(logfile=''):
-    """
-    Set up the logging module to write to the correct logfile, etc.
-    """
-
-    if logfile == '' or logfile is None:
-        # Set the log output to the null file. This should actually be cross-
-        # platform, i.e. equal to '/dev/null' on unix systems and 'NULL' on
-        # windows.
-        logfile = os.devnull
-
-    # TODO: I should really take advantage of some of the more advanced
-    # features of the logging module.
-    user = getpass.getuser()
-    log_format = '%(asctime)s | ' + user + " | %(message)s"
-    date_format = '%m/%d/%Y %I:%M:%S'
-    logging.basicConfig(format=log_format, filename=logfile,
-                        datefmt=date_format, level='INFO')
-
-
-def tree(obj, get_deps: callable, pipe='│', dash='─', tee='├',
-         elbow='└', indent=' ' * 3, prefix='') -> str:
-    """Takes an object and a closure that is assumed to return an iterable of
-    dependent objects of the same type; produces an ascii tree diagram.
-    """
-    s = str(obj)
-    deps = list(get_deps(obj))
-
-    # special case for empty dependents: no pipes
-    if not deps:
-        ('\n' + prefix).join(s.split('\n'))
-        return s
-
-    # otherwise, dependents are nonempty: pipe to them
-    s = (prefix + '\n' + pipe).join(s.split('\n'))
-    s += '\n'
-
-    for i, dep in enumerate(deps):
-        if i == len(deps) - 1:
-            leader = elbow + dash * len(indent)
-        else:
-            leader = tee + dash * len(indent)
-
-        s += prefix + leader
-        new_prefix = pipe + indent if i != len(deps) - 1 else ' ' + indent
-        subtree = tree(dep, get_deps, prefix=new_prefix)
-        s += ('\n' + new_prefix).join(subtree.split('\n'))
-    return s
 
 
 class StatusMessage:
