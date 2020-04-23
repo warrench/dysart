@@ -141,14 +141,16 @@ class LogHistory:
                     raise IndexError('Labber logfile with index {} cannot be found'.format(index))
                 if log_path not in self.log_cache:
                     log_file = Labber.LogFile(self.log_path(index))
-                    self.log_cache[log_path] = []
-                    for i in range(log_file.getNumberOfEntries()):
-                        self.log_cache[log_path].append(log_file.getEntry(i))
+                    self.log_cache[log_path] = [
+                       log_file.getEntry(i)
+                        for i in range(log_file.getNumberOfEntries())
+                    ]
 
                 return self.log_cache[log_path]
         elif type(index) == slice:
             # TODO is a less naive implementation possible here?
             # Probably should do some bounds checking, at least.
+            # TODO test this, e.g. with slice [:]--it is known not to work.
             return [self[i] for i in range(index.start, index.stop, index.step)]
         else:
             raise TypeError
@@ -369,10 +371,10 @@ class LabberFeature(Feature):
         elif isinstance(value, np.ndarray):
             canonicalized_value = list(value)
         elif isinstance(value, tuple):
-            canonicalized_value = list(np.linspace(*value))
+            canonicalized_value = value
         elif isinstance(value, (int, float, complex)):
             canonicalized_value = value
-        #    self.config.updateValue(label, canonizalized_value)
+        #    self.config.updateValue(label, canonicalized_value)
         else:
             Exception("I don't know what to do with this value")
 
@@ -388,10 +390,15 @@ class LabberFeature(Feature):
         new_config = copy.deepcopy(self.template)
         for diff_key in self.template_diffs:
             vals = self.template_diffs[diff_key]
-            channel = [c for c in new_config['step_channels'] if
+            channels = [c for c in new_config['step_channels'] if
                        c['channel_name'] == diff_key]
-            channel = [{}] if not channel else channel[0]
+            channel = [{}] if not channels else channels[0]
+            # Resolve a 3-tuple as (start, stop, n_pts).
+            # For now, let's *only* handle linear interpolation
             if isinstance(vals, tuple):
+                # It's wrapped in a list: if our assumption that it's length 1
+                # is wrong, let us know. We'll pull in Antti's code to do this
+                # correctly.
                 items = channel['step_items'][0]
                 items['start'] = vals[0]
                 items['stop'] = vals[1]

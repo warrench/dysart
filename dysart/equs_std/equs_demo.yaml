@@ -15,6 +15,7 @@ Modules:
   # on the search path, so we only need to give the filename here!
   Hooks:
     - slack.py
+    - hooks.py
 
 
 # The features defining the dependency tree in the project.
@@ -32,6 +33,8 @@ Features:
     # project but leave this name unchanged, the feature will refer to the
     # data.
     id: qubit_spectrum_1
+    pre_hook:
+      name: hooks.debug
     # We can customize the behavior of a Feature by adding hooks. this hook
     # runs after completion of a measurement, sending a message to a specified
     # user ID on Slack.
@@ -48,5 +51,7 @@ Features:
     # its class. There is not yet any "static" or "import-time" checking
     # is done correctly by the user, so you might encounter strange
     # runtime errors if you make a mistake.
+    pre_hook:
+      name: hooks.debug
     parents:
       spec: qubit_spectrum_1

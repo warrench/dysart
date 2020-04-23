@@ -35,3 +35,7 @@ def post_hook(fn: Callable) -> Callable:
     # flag the argument as a post hook
     fn.post_hook = True
     return fn
+
+@pre_hook
+def debug(record):
+    print(f"calling {record.method}")
