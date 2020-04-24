@@ -77,7 +77,6 @@ class result:
             feature = args[0] # TODO: is this good practice?
 
             index = kwargs.get('index') or -1  # default last entry
-            hist_len = len(feature.log_history)
             # Ensure that `results` is long enough.
             if index < 0:
                 index = len(feature.log_history) + index
@@ -141,12 +140,9 @@ class LogHistory:
                     raise IndexError('Labber logfile with index {} cannot be found'.format(index))
                 if log_path not in self.log_cache:
                     log_file = Labber.LogFile(self.log_path(index))
-                    self.log_cache[log_path] = [
-                       log_file.getEntry(i)
-                        for i in range(log_file.getNumberOfEntries())
-                    ]
-
+                    self.log_cache[log_path] = log_file
                 return self.log_cache[log_path]
+
         elif type(index) == slice:
             # TODO is a less naive implementation possible here?
             # Probably should do some bounds checking, at least.
@@ -310,18 +306,12 @@ class LabberFeature(Feature):
         for key in kwargs:
             self.set_value(key, kwargs[key])
 
-        # Make RPC to Labber!
-        # set the input file.
+        # Make call to Labber!
         self.labber_input_file = self.emit_labber_input_file()
         self.labber_output_file = self.log_history.next_log_path()
         self.config.performMeasurement()
         # Clean up: tempfile no longer needed.
         os.unlink(self.labber_input_file)
-
-        # Raw data is now in output_file. Load it into self.data.
-        # TODO do these *do** anything?
-        log_name = os.path.split(self.labber_output_file)[-1]
-        log_file = Labber.LogFile(self.labber_output_file)
 
     def all_results(self, index=-1) -> dict:
         """Returns a dict containing all the result values, even if they haven't been
@@ -379,7 +369,6 @@ class LabberFeature(Feature):
             Exception("I don't know what to do with this value")
 
         self.template_diffs[label] = canonicalized_value
-        #self.set_expired(True)
 
     def merge_configs(self):
         """TODO write a real docstring here
@@ -392,7 +381,7 @@ class LabberFeature(Feature):
             vals = self.template_diffs[diff_key]
             channels = [c for c in new_config['step_channels'] if
                        c['channel_name'] == diff_key]
-            channel = [{}] if not channels else channels[0]
+            channel = {} if not channels else channels[0]
             # Resolve a 3-tuple as (start, stop, n_pts).
             # For now, let's *only* handle linear interpolation
             if isinstance(vals, tuple):

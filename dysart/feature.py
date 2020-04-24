@@ -101,7 +101,6 @@ def refresh(fn):
             exc = None
         # TODO must have an exception type for measurement failures
         except Exception as e:
-            breakpoint()
             exc = e
         finally:
             record.conclude(exc)

@@ -52,9 +52,9 @@ class QubitSpectrum(LabberFeature):
         """
         Compute a best fit for the resonance data at this index.
         """
-        last_entry = self.log_history[index][-1]
-        drive_frequency_data = last_entry[self.drive_frequency_channel]
-        polarization_Z_data = last_entry[self.polarization_Z_channel]
+        entry = self.log_history[index].getEntry(0)
+        drive_frequency_data = entry[self.drive_frequency_channel]
+        polarization_Z_data = entry[self.polarization_Z_channel]
         fit = spectra.fit_spectrum(drive_frequency_data, polarization_Z_data, 1)
         return fit.params.valuesdict()
 
@@ -123,9 +123,9 @@ class QubitRabi(LabberFeature):
         # self.results should be totally hidden.
 
         # fit results and enter them in self.data
-        last_entry = self.log_history[index][-1]
-        plateau_data = last_entry[self.plateau_channel]
-        polarization_Z_data = last_entry[self.polarization_Z_channel]
+        entry = self.log_history[index].getEntry(0)
+        plateau_data = entry[self.plateau_channel]
+        polarization_Z_data = entry[self.polarization_Z_channel]
         fit = rabi.fit_rabi(plateau_data, polarization_Z_data)
         return fit.params.valuesdict()
 
