@@ -13,6 +13,7 @@ the last person who touched the system.
 """
 
 import datetime as dt
+import enum
 from functools import wraps
 import getpass
 import hashlib
@@ -79,11 +80,16 @@ def refresh(fn):
             hostname=socket.gethostname()
         )
         record.setup()
+
         # First run the optional pre-hook, if any
         if hasattr(feature, '__pre_hook__'):
             feature.__pre_hook__(record)
+            
         try:
             # Call the Feature--this is the reason for this wrapper's existence
+            # TODO note that `is_stale` sounds like it just returns a boolean--
+            # but it has very significant side-effects. This is probably a
+            # symptom of poor design.
             is_stale = feature.is_stale(record)
             if is_stale:
                 feature(initiating_call=initiating_call)
@@ -95,15 +101,20 @@ def refresh(fn):
                 kwargs['is_stale'] = is_stale
             # Call the requested function!
             return_value = fn(*args, **kwargs)
+            
+            # Run the optional validation hook, if any 
+            if hasattr(feature, '__validation_hook__'):
+                feature.__validation_hook__(record, return_value)
+            
             # Save any changes to the database
             # feature.manual_expiration_switch = False
             feature.save()
-            exc = None
+            status = CallStatus.DONE
         # TODO must have an exception type for measurement failures
         except Exception as e:
-            exc = e
+            status = CallStatus.FAILED
         finally:
-            record.conclude(exc)
+            record.conclude(status)
             # Finally, run the optional post-hook, if any
             if hasattr(feature, '__post_hook__'):
                 feature.__post_hook__(record)
@@ -290,6 +301,13 @@ class Feature(me.Document):
         self.save()
 
 
+class CallStatus(enum.Enum):
+    START = 1
+    DONE = 2
+    FAILED = 3
+    HALTED = 4
+    WARNING = 5
+
 class CallRecord(me.Document):
     """
     TODO CallRecord docstring
@@ -299,11 +317,6 @@ class CallRecord(me.Document):
     """
 
     meta = {'allow_inheritance': True}
-
-    # Exit codes
-    DONE = 'DONE'
-    FAILED = 'FAILED'
-    WARNING = 'WARNING'
 
     UUID_LEN = 40
 
@@ -325,7 +338,7 @@ class CallRecord(me.Document):
     stop_time = me.DateTimeField()
     user = me.StringField(max_length=255)
     hostname = me.StringField(max_length=255)
-    exit_status = me.StringField(max_length=12, default='DONE')
+    exit_status = me.StringField(max_length=16)
     info = me.StringField(default='')
 
     def __init__(self, *args, **kwargs):
@@ -333,6 +346,15 @@ class CallRecord(me.Document):
         args
         """
         super().__init__(*args, **kwargs)
+        
+    def __setattr__(self, key, value):
+        """The `exit_status` field should be a string, so handle this
+        case in a special way: accept only CallStatus enums, but
+        """
+        if key == 'exit_status' and type(value) == CallStatus:
+            super().__setattr__(key, value.name)
+        else:
+            super().__setattr__(key, value)
 
     def setup(self):
         """ This is run to setup the call record before the actual call is
@@ -347,9 +369,10 @@ class CallRecord(me.Document):
         self.__gen_uuid()
         self.save()
     
-    def conclude(self, exc: Optional[Exception]):
+    def conclude(self, status: CallStatus):
         """ ...and this one tears it down
         """
+        self.exit_status = status
         self.stop_time = dt.datetime.now()
         self.save()
 
