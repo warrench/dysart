@@ -24,7 +24,7 @@ from Labber import ScriptTools as st
 from dysart.labber.labber_serialize import load_labber_scenario_as_dict
 from dysart.labber.labber_serialize import save_labber_scenario_from_dict
 from dysart.labber.labber_util import no_recorded_result
-from dysart.feature import Feature, CallRecord, refresh
+from dysart.feature import Feature, CallRecord, ExpirationStatus, refresh
 import dysart.messages.messages as messages
 from dysart.messages.errors import UnsupportedPlatformError
 import toplevel.conf as conf
@@ -85,8 +85,7 @@ class result:
 
             try:
                 return_value = feature.results[index][fn.__name__]
-            except:
-                # TODO: Pokemon exception handling
+            except KeyError:  # Results of this function at this index not cached!
                 return_value = fn(*args, **kwargs)
                 feature.results[index][fn.__name__] = return_value
                 feature.save()
@@ -454,7 +453,11 @@ class LabberFeature(Feature):
         TODO: introspect in call record history for detailed expiration info.
         For now, simply checks if there exists a named output file.
         """
-        return no_recorded_result(self) or self.manual_expiration_switch
+        expired = self.manual_expiration_switch
+        expired |= no_recorded_result(self)
+        if hasattr(self, '__expiration_hook__'):
+            expired |= self.__expiration_hook__() == ExpirationStatus.EXPIRED
+        return expired
 
 
 class LabberCall(CallRecord):

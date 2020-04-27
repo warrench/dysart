@@ -25,6 +25,12 @@ import mongoengine as me
 
 import dysart.messages.messages as messages
 
+
+class ExpirationStatus(enum.Enum):
+    FRESH = enum.auto()
+    EXPIRED = enum.auto()
+
+
 def refresh(fn):
     """Decorator that flags a method as having dependencies and possibly requiring
     a refresh operation. Recursively refreshes ancestors, then checks an
@@ -110,7 +116,6 @@ def refresh(fn):
             # feature.manual_expiration_switch = False
             feature.save()
             status = CallStatus.DONE
-        # TODO must have an exception type for measurement failures
         except Exception as e:
             status = CallStatus.FAILED
         finally:
@@ -118,7 +123,7 @@ def refresh(fn):
             # Finally, run the optional post-hook, if any
             if hasattr(feature, '__post_hook__'):
                 feature.__post_hook__(record)
-            
+
         # Finally, pass along return value of fn
         return return_value
     
@@ -173,7 +178,6 @@ class Feature(me.Document):
         status = self._status()
         if status:
             s += '\n' + status
-
         return s
 
     def tree(self) -> None:
@@ -202,7 +206,7 @@ class Feature(me.Document):
         for prop in self._properties():
             messages.pprint_func(prop, self.__class__.__dict__[prop].__doc__)
 
-    def call_records(self, **kwargs) -> list:
+    def call_records(self, **kwargs) -> me.QuerySet:
         """Return a list of CallRecords associated with this Feature.
 
         """
@@ -212,7 +216,7 @@ class Feature(me.Document):
             # TODO: use a standard error-reporting method in the messages module.
             print("Invalid call record field: allowedfields are TODO", sys.stderr)
 
-    def pprintt_call_records(self) -> list:
+    def pprint_call_records(self) -> list:
         """Pretty-print a list of CallRecords associated with this Feature
         """
         for record in self.call_records():
@@ -257,9 +261,12 @@ class Feature(me.Document):
         return is_stale
 
     def expired(self, call_record: "CallRecord" = None) -> object:
-        """Check for feature expiration. By default, everything is a twinkie.
+        """Check for feature expiration.
         """
-        return self.manual_expiration_switch
+        expired = self.manual_expiration_switch
+        if hasattr(self, '__expiration_hook__'):
+            expired |= self.__expiration_hook__() == ExpirationStatus.EXPIRED
+        return expired
 
     def set_expired(self, is_expired: bool = True) -> None:
         """Provide an interface to manually set the expiration state of a feature.
@@ -302,11 +309,12 @@ class Feature(me.Document):
 
 
 class CallStatus(enum.Enum):
-    START = 1
-    DONE = 2
-    FAILED = 3
-    HALTED = 4
-    WARNING = 5
+    START = enum.auto()
+    DONE = enum.auto()
+    FAILED = enum.auto()
+    HALTED = enum.auto()
+    WARNING = enum.auto()
+
 
 class CallRecord(me.Document):
     """
@@ -401,7 +409,6 @@ class CallRecord(me.Document):
         if self.initiating_call:
             h.update(self.initiating_call.uuid.encode('utf-8'))
         self.uuid = h.hexdigest()[:CallRecord.UUID_LEN]
-
 
     def get_initiated_call(self, other_feature):
         # Should search tree for a matching call.

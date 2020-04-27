@@ -1,13 +1,15 @@
-from typing import Dict, Callable, List
 import importlib.util
 import os
 import sys
+import types
+from typing import Dict, Callable, List
 
 from dysart.messages.errors import ValidationError, ModuleNotFoundError
 import toplevel.conf as conf
 
 import mongoengine as me
 import yaml
+
 
 class Project:
     """A wrapper class that handles project configuration parsing and
@@ -180,6 +182,8 @@ class Project:
         # get the key->id mapping of the feature's parents; default to empty dict
         feature_parents = feature_meta.get('parents', {})
 
+        # TODO: it should also be easy to *update* parents just by editing
+        # the .yaml
         try:
             # Attempt to find this feature in the database
             feature = feature_class.objects.get(id=feature_id)
@@ -192,20 +196,31 @@ class Project:
             # Don't do anything yet; just propagate the exception
             raise me.MultipleObjectsReturned
 
-        # Attach hooks
-        pre_hook = feature_meta.get('pre_hook', None)
-        if pre_hook is not None:
-            fn = self.resolve_hook(pre_hook['name'])
-            if 'args' in pre_hook:
-                fn = fn(*pre_hook['args'])
-            feature.__pre_hook__ = fn
-
-        post_hook = feature_meta.get('post_hook', None)
-        if post_hook is not None:
-            fn = self.resolve_hook(post_hook['name'])
-            if 'args' in post_hook:
-                fn = fn(*post_hook['args'])
-            feature.__post_hook__ = fn
+        # Attach hooks--you might want to abstract away this repetition.
+        def attach_hook(hook_type: str, method_type = False):
+            """Binds a hook to the feature. If `method_type` is truthy,
+            this hook will behave like a method--it will accept the
+            feature as its implicit first argument.
+            """
+            nonlocal feature
+            hook_meta = feature_meta.get(hook_type, None)
+            if hook_meta is not None:
+                fn = self.resolve_hook(hook_meta['name'])
+                args = hook_meta.get('args', [])
+                kwargs = hook_meta.get('kwargs', {})
+                if args or kwargs:
+                    fn = fn(*args, **kwargs)
+                if method_type:
+                    fn = types.MethodType(fn, feature)
+                setattr(feature, f"__{hook_type}__", fn)
+        
+        attach_hook('pre_hook')
+        attach_hook('post_hook')
+        # I sort of don't like that these hooks in particular have a different
+        # signature--in particular, they're expected to return a
+        # feature.ExpirationStatus, instead of being "pure side-effect." This
+        # seems a little ugly to me, and is a possible source of future bugs.
+        attach_hook('expiration_hook', method_type=True)
 
         # Finally, put the feature into the project namespace
         self.features[feature_name] = feature
