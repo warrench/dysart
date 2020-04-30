@@ -12,14 +12,17 @@ import numpy as np
 from lmfit import Model, CompositeModel
 from lmfit.models import ExponentialModel
 
+
 def decaying_sinusoid(x, c, amp, freq, phase, decay):
     return c + amp * np.exp(- x * decay) * np.cos(2 * np.pi * freq * x + phase)
 
 # Parameter guess functions are as dumb as possible for now. Leave this until
 # something breaks. Worse is better.
 
+
 def guess_c(x, y):
     return np.mean(y)
+
 
 def guess_amp(x, y):
     abs_amp = (np.max(y) - np.min(y))/2
@@ -28,17 +31,21 @@ def guess_amp(x, y):
     else:
         return -abs_amp
 
+
 def guess_freq(x, y):
     amin = np.argmin(y)
     amax = np.argmax(y)
     pi_time = np.abs(x[amin] - x[amax])
     return 1/(2 * pi_time)
 
+
 def guess_phase(x, y):
     return 0
 
+
 def guess_decay(x, y):
     return 1/x[-1]
+
 
 def fit_rabi(x, y):
     """

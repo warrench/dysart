@@ -130,7 +130,7 @@ def get_config_keys():
 
 
 @_dypy_help
-def load_project(project_path: str = None):
+def load_project(project_path: Optional[str] = None):
     """Set up a default feature tree, e.g. specified by the DySART config file.
     Retrieves the project specified by config variable `DEFAULT_PROJ`
 
@@ -138,8 +138,9 @@ def load_project(project_path: str = None):
         project_path (str): The path relative to `DYS_PATH` to load. defaults
         to `DEFAULT_PROJ`.
     """
-
     # First, remove the current project from the global namespace
+    # TODO rewrite this so that load_project is _atomic_.
+
     clear_project()
 
     if project_path is None:
@@ -147,12 +148,13 @@ def load_project(project_path: str = None):
             # Sanitize paths possibly containing e.g. "~"
             project_path = os.path.expanduser(config['DEFAULT_PROJ'])
         except KeyError:
-            report_failure("no default project path specified.")
+            # TODO use an error function from the messages module
+            print("no default project path specified.")
             return
 
-    global __PROJ
-    __PROJ = dysart.project.Project(project_path)
-    globals().update(__PROJ.features)
+    dyserver.load_project(project_path)
+    globals().update(dyserver.project.features)
+
 
 @_dypy_help
 def clear_project():
@@ -161,18 +163,19 @@ def clear_project():
     Returns: None
 
     """
-
-    global __PROJ
-    if __PROJ is not None:
-        for name, feature in __PROJ.features.items():
+    try:
+        for name, feature in dyserver.project.features.items():
             del globals()[name]
-        __PROJ = None
+    except AttributeError:
+        # presumably there isn't a project yet--pass silently
+        pass
+
 
 @_dypy_help
 def print_feature_dag():
     """Print all the features that are currently included.
     """
-    for name, feature in __PROJ.features.items():
+    for name, feature in dyserver.project.features.items():
         if not feature.parents:  # i.e. if it's a root
             feature.tree()
 

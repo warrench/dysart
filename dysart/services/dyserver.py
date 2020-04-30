@@ -42,6 +42,7 @@ import mongoengine as me
 
 from dysart.messages.messages import StatusMessage
 from dysart.messages.errors import *
+import dysart.project as project
 import dysart.services.service as service
 from dysart.services.jobscheduler import Job, JobScheduler
 from dysart.services.streams import DysDataStream
@@ -140,10 +141,11 @@ class Dyserver(service.Service):
     def provision_object(self, cls, id):
         pass
 
-    def load_project(self, proj_name):
-        """Loads a project into memory.
+    def load_project(self, project_path: str):
+        """Loads a project into memory, erasing a previous project if it
+        existed.
         """
-        return
+        self.project = project.Project(project_path)
 
     def set_project(self, proj_name):
         """Sets the working project
