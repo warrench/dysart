@@ -1,59 +1,68 @@
 # -* coding: utf-8 -*-
 
-import json
-import urllib.request as request
-import sys
-from typing import Union
+"""
+This module provides a native Python client library for Dysart using a
+remote-object protocol to access Feature methods.
+"""
 
-import numpy as np
-
-# auth info should probably be handled by urllib.request
+import requests
 
 
-class DyPyClient():
-    """
-    A basic remote client for DyPy
+class RemoteProject:
+    """A handle to a remote Dysart project
     """
 
-    def __init__(self, hostname, port):
-        self._response = ''
-        self.server_address = '{}:{}'.format(hostname, port)
-        pass
+    def __init__(self, name: str, hostname: str, port: int):
+        self.name = name
+        self.hostname = hostname
+        self.port = port
 
     @property
-    def response(self) -> Union[int, float, str, np.array]:
-        """parse and return the reponse string.
-        This method is potentially _extremely dangerous_, and must be approached
-        with great care. DO NOT replace this function body with
-                        `return eval(self._response)`
-        which could run arbitrary code served over an untrusted network on the
-        client. For this demo version, the
-        """
-        try:
-            return float(self._response)
-        except Exception:
-            raise ValueError('non-float reponse from dysart server')
+    def url(self):
+        return f"http://{self.hostname}:{self.port}/remote/"
 
-    def issue_query(self, doc_class, name, method):
+    def __getattr__(self, feature_name: str):
         """
 
+        Returns: a handle to a remote object representing
+
         """
-        d = {'user': 'root',
-             'secret': 'root',
-             'doc_class': doc_class,
-             'name': name,
-             'method': method}
-        d_flat = [item for kv in d.items() for item in kv]
+        return RemoteFeature(feature_name, project=self)
 
-        url_prefix = 'http://{}/?'.format(self.server_address)
-        with request.urlopen((url_prefix + '{}={}&' * len(d)).format(*d_flat)) as u:
-            self.response = json.loads(u.read().decode('utf-8'))
 
+class RemoteFeature:
+    """A handle to a remote Dysart feature
+    """
+
+    def __init__(self, name: str, project: RemoteProject):
+        self.name = name
+        self.project = project
+
+    @property
+    def url(self):
+        return self.project.url + f"feature/{self.name}/"
+
+    def __getattr__(self, method_name: str):
+        return RemoteProcedureCall(method_name, feature=self)
+
+
+class RemoteProcedureCall:
+
+    def __init__(self, name: str, feature: RemoteFeature):
+        self.name = name
+        self.feature = feature
+    
+    @property
+    def url(self):
+        return self.feature.url + f"{self.name}/"
+
+    def __call__(self, *args, **kwargs):
+        response = requests.get(self.url, data=[args, kwargs])
+        return RemoteProcedureCall.interp_response(response)
+
+    @staticmethod
+    def interp_response(response):
+        return response
 
 if __name__ == '__main__':
-    client = DyPyClient(hostname='localhost', port='8000')
-    while True:
-        reqstr = input(' :: ')
-        doc_class, name, method, *_ = reqstr.split()
-        client.issue_query(*reqstr.split())
-        print(client.response)
+    proj = RemoteProject(name='equs_demo', hostname='localhost', port='8000')

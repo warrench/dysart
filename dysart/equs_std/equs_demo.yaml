@@ -58,4 +58,5 @@ Features:
     parents:
       spec: qubit_spectrum_1
     expiration_hook:
-      name: expiration.always_expired
+      name: expiration.timeout
+      kwargs: {minutes: 1}
