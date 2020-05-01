@@ -5,6 +5,9 @@
 # The port bound by the Dysart server.
 server_port: 8000
 
+# The address of the dysart server
+server_hostname: '127.0.0.1'
+
 # The machine the mongodb database runs on
 db_host: localhost
 

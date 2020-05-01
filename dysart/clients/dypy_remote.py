@@ -5,6 +5,8 @@ This module provides a native Python client library for Dysart using a
 remote-object protocol to access Feature methods.
 """
 
+import pickle
+
 import requests
 
 
@@ -16,10 +18,6 @@ class RemoteProject:
         self.name = name
         self.hostname = hostname
         self.port = port
-
-    @property
-    def url(self):
-        return f"http://{self.hostname}:{self.port}/remote/"
 
     def __getattr__(self, feature_name: str):
         """
@@ -38,10 +36,6 @@ class RemoteFeature:
         self.name = name
         self.project = project
 
-    @property
-    def url(self):
-        return self.project.url + f"feature/{self.name}/"
-
     def __getattr__(self, method_name: str):
         return RemoteProcedureCall(method_name, feature=self)
 
@@ -52,17 +46,25 @@ class RemoteProcedureCall:
         self.name = name
         self.feature = feature
     
-    @property
-    def url(self):
-        return self.feature.url + f"{self.name}/"
-
     def __call__(self, *args, **kwargs):
-        response = requests.get(self.url, data=[args, kwargs])
+        proj = self.feature.project
+        url = f"http://{proj.hostname}:{proj.port}/remote/feature"
+        data = {
+            'project': proj.name,
+            'feature': self.feature.name,
+            'method': self.name,
+            'args': args,
+            'kwargs': kwargs
+        }
+        response = requests.post(url, json=data)
         return RemoteProcedureCall.interp_response(response)
 
     @staticmethod
     def interp_response(response):
-        return response
+        response.raise_for_status()
+        return pickle.loads(response.content)
 
 if __name__ == '__main__':
-    proj = RemoteProject(name='equs_demo', hostname='localhost', port='8000')
+    proj = RemoteProject(name='equs_demo',
+                         hostname='127.0.0.1',
+                         port=8000)

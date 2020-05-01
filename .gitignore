@@ -2,6 +2,7 @@
 
 # Config file, which may e.g. contain API keys
 .dysart.conf
+config.yaml
 
 # Mac stuff
 .DS_Store
