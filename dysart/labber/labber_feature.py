@@ -242,7 +242,7 @@ class LabberFeature(Feature):
                                            self.output_file_path)
 
         self.log_history = LogHistory(self.id,
-                                      conf.config['LABBER_DATA_DIR'],
+                                      conf.config['labber_data_dir'],
                                       os.path.split(self.output_file_path)[-1])
 
     # If this turns out to be visibly slow, can be replaced with some metaclass

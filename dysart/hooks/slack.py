@@ -9,7 +9,7 @@ import aiohttp
 from slack import WebClient
 from slack.errors import SlackApiError
 
-client = WebClient(token=conf.config['SLACK_API_TOKEN'])
+client = WebClient(token=conf.config['slack_api_token'])
 
 def to_channel(channel: str):
     @post_hook

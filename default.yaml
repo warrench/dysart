@@ -1,0 +1,30 @@
+# This file contains configuration details of the Dysart application server.
+# It is generally accessed through the `config` variable in the `toplevel.conf`
+# module. You should edit this file to suit your deployment.
+
+# The port bound by the Dysart server.
+server_port: 8000
+
+# The machine the mongodb database runs on
+db_host: localhost
+
+# The port that the mongodb database listens on
+db_port: 55455
+
+labber_host: localhost
+
+# Authorized remote hosts
+whitelist: ['127.0.0.1']
+
+# Name of the mongodb database to use.
+default_db: debug_data
+
+logfile_name: .dysart.log
+
+# Path to the root of the project
+dys_path: ~/equs/QMIT/dysart
+
+labber_data_dir: ~/equs/QMIT/dysart/debug_data/labber
+
+# This is the project configuration that will be loaded on startup
+default_proj: ~/equs/QMIT/dysart/dysart/equs_std/equs_demo.yaml

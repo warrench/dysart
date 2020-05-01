@@ -17,6 +17,7 @@ qubit_rabi_file_out = os.path.join(template_path, 'qubit_rabi_out.hdf5')
 qubit_spec_file = os.path.join(template_path, 'qubit_spec.json')
 qubit_spec_file_out = os.path.join(template_path, 'qubit_spec_out.hdf5')
 
+
 class ResonatorSpectrum(LabberFeature):
     pass
 

@@ -13,7 +13,7 @@ setup(
         'uncertainties>=3.1',
         'msgpack>=0.5'
         'h5py>=2.10.0'
-        'Labber'
+        'Labber', 'PyYAML', 'requests'
     ],
     long_description=open('README.md').read(),
     url='https://github.com/qmit/dysart'

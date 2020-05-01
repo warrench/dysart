@@ -91,7 +91,7 @@ class Project:
         namespace
         """
         dysart_hook_dir = os.path.join(
-            os.path.expanduser(conf.config['DYS_PATH']), 'dysart', 'hooks')
+            os.path.expanduser(conf.config['dys_path']), 'dysart', 'hooks')
         search_path = [os.path.dirname(self.path), dysart_hook_dir]
         module_name, mod = Project.__load_module(mod_path, search_path)
         self.hook_modules.update({module_name: mod})

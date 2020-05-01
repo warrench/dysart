@@ -274,15 +274,15 @@ class StatusMessage:
     """
 
     def __init__(self, infostr: str, donestr: str = 'done.',
-                 failstr: str = 'failed.', capture_io: bool = True):
+                 failstr: str = 'failed.', capture_io: bool = False):
         self.infostr = infostr
         self.donestr = donestr
         self.failstr = donestr
         self.num_cols = max(int(conf.config.get('STATUS_COL') or DEFAULT_COL),
                             len(infostr))
         self.status = 'ok'
-        self.__old_stdout, self.__old_stderr = sys.stdout, sys.stderr
         self.__capture_io = capture_io
+        self.__old_stdout, self.__old_stderr = sys.stdout, sys.stderr
 
     def __enter__(self):
         """Prints a message describing the action taken and redirects io"""
