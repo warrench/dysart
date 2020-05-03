@@ -6,6 +6,7 @@ things up by passing in-memory data buffers to reduce the number of writes,
 etc.
 """
 
+import asyncio
 import os
 import sys
 import copy
@@ -23,8 +24,7 @@ from Labber import ScriptTools as st
 
 from dysart.labber.labber_serialize import load_labber_scenario_as_dict
 from dysart.labber.labber_serialize import save_labber_scenario_from_dict
-from dysart.labber.labber_util import no_recorded_result
-from dysart.feature import Feature, CallRecord, ExpirationStatus, refresh
+from dysart.feature import Feature, CallRecord, refresh
 import dysart.messages.messages as messages
 from dysart.messages.errors import UnsupportedPlatformError
 import toplevel.conf as conf
@@ -50,12 +50,19 @@ testing, but this is a pretty dangerous practice in production code.
 """
 default_client = globals().get('dyserver')
 
+# This class-variable lock is used to synchronize calls to Labber in an async
+# context.
+LOCK = asyncio.Lock()
 
-# NOTE: This lower-case name is correct! This class is intended to be used as a
+
+# NOTE: This lower-case name is intended! This class is meant to be used as a
 # method decorator.
 class result:
     """This decorator class annotates a result-yielding method of a Labber feature.
     """
+    
+    is_refresh = True
+
     def __init__(self, fn: Callable) -> None:
         """This accepts a 'result-granting' function and returns a refresh function
         whose return value is cached into the `results` field of `feature` with key
@@ -92,7 +99,7 @@ class result:
             return return_value
 
         wrapped_fn.is_result = True
-        self.wrapped_fn = refresh(wrapped_fn)
+        self.wrapped_fn = wrapped_fn
         self.__name__ = wrapped_fn.__name__  # TODO: using `wraps` right?
         self.__doc__ = wrapped_fn.__doc__
 
@@ -293,7 +300,7 @@ class LabberFeature(Feature):
                     + ' : {}\n'.format(val_f)
         return s
 
-    def __call__(self, initiating_call=None, **kwargs):
+    async def __call__(self, initiating_call=None, **kwargs):
         """
         Thinly wrap the Labber API
 
@@ -308,7 +315,8 @@ class LabberFeature(Feature):
         # Make call to Labber!
         self.labber_input_file = self.emit_labber_input_file()
         self.labber_output_file = self.log_history.next_log_path()
-        self.config.performMeasurement()
+        async with LOCK:
+            self.config.performMeasurement()
         # Clean up: tempfile no longer needed.
         os.unlink(self.labber_input_file)
 
@@ -445,19 +453,6 @@ class LabberFeature(Feature):
     @labber_output_file.setter
     def labber_output_file(self, x):
         self.config.sCfgFileOut = x
-
-    def expired(self, call_record=None):
-        """
-        Default expiration condition: is there a result?
-
-        TODO: introspect in call record history for detailed expiration info.
-        For now, simply checks if there exists a named output file.
-        """
-        expired = self.manual_expiration_switch
-        expired |= no_recorded_result(self)
-        if hasattr(self, '__expiration_hook__'):
-            expired |= self.__expiration_hook__() == ExpirationStatus.EXPIRED
-        return expired
 
 
 class LabberCall(CallRecord):

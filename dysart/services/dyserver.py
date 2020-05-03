@@ -30,6 +30,7 @@ value returned.
 
 from io import StringIO
 import pickle
+import socket
 
 from dysart.messages.messages import StatusMessage
 from dysart.messages.errors import *
@@ -44,6 +45,7 @@ import aiohttp.web as web
 
 # TEMPORARY
 from dysart.equs_std.equs_features import *
+
 
 class Dyserver(service.Service):
 
@@ -144,8 +146,41 @@ class Dyserver(service.Service):
         """
         if request.remote not in conf.config['whitelist']:
             raise web.HTTPUnauthorized
+    
+    async def refresh_feature(self, feature, request):
+        """
         
+        Args:
+            feature: the feature to be refreshed
+
+        Todo:
+            Schedule causally-independent features to be refreshed
+            concurrently. This should just execute them serially.
+            At some point in the near future, I'd like to implement
+            a nice concurrent graph algorithm that lets the server
+            keep multiple refreshes in flight at once.
+        """
+        scheduled_features = await feature.expired_ancestors()
+        print(f"Feature: {feature.id}\n", 
+              getattr(feature, "__expiration_hook__"),
+              scheduled_features)
+        for scheduled_feature in scheduled_features:
+            record = CallRecord(
+                remote=request.remote,
+                feature=scheduled_feature,
+                hostname=socket.gethostname()
+            )
+            await scheduled_feature.exec_feature(record)
+
     async def feature_method_handler(self, request):
+        """
+        
+        Args:
+            request: 
+
+        Returns:
+
+        """
         await self.authorize(request)
         data = await request.json()
         
@@ -166,30 +201,33 @@ class Dyserver(service.Service):
             feature = self.project.features[data['feature']]
         except KeyError:
             raise web.HTTPNotFound(
-                reason=f"Feature {feature.name} not found"
+                reason=f"Feature {data['feature']} not found"
             )
         
         try:
             method = getattr(feature, data['method'])
         except KeyError:
             raise web.HTTPNotFound(
-                reason=f"Feature {feature.name} has no method {method.name}"
+                reason=f"Feature {feature.name} has no method {data['method']}"
             )
 
+        if hasattr(method, 'is_refresh'):
+            await self.refresh_feature(feature, request)
+        
         return_value = method(*data['args'], **data['kwargs'])
         return web.Response(body=pickle.dumps(return_value))
 
     async def test_handler(self, request):
-        print('hello!')
-        return web.Response(text="hello, world")
+        print('Running test handler!')
+        return web.Response(text="hello, world!")
     
     def setup_routes(self):
         self.app.router.add_get('/', self.test_handler)
         self.app.router.add_post('/remote/feature', self.feature_method_handler)
 
-
 class LabberContext:
-    """A context manager to wrap connections to Labber and capture errors"""
+    """A context manager to wrap connections to Labber and capture errors
+    """
 
     def __enter__(self):
         sys.stdout = sys.stderr = self.buff = StringIO()
