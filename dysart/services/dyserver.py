@@ -204,13 +204,14 @@ class Dyserver(service.Service):
                 reason=f"Feature {data['feature']} not found"
             )
         
-        try:
-            method = getattr(feature, data['method'])
-        except KeyError:
+        method = getattr(feature, data['method'], None)
+        if not hasattr(method, 'exposed'):
+            # This exception will be raised if there is no such method *or* if
+            # the method is unexposed.
             raise web.HTTPNotFound(
-                reason=f"Feature {feature.name} has no method {data['method']}"
+                reason=f"Feature {data['feature']} has no method {data['method']}"
             )
-
+        
         if hasattr(method, 'is_refresh'):
             await self.refresh_feature(feature, request)
         

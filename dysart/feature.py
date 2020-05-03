@@ -29,10 +29,15 @@ class ExpirationStatus(enum.Enum):
     EXPIRED = enum.auto()
 
 
+def exposed(fn):
+    fn.exposed = True
+    return fn
+    
 def refresh(fn):
     """Decorator that flags a method as having dependencies and possibly requiring
-    a refresh operation.
+    a refresh operation. Refresh methods are always exposed.
     """
+    fn.exposed = True
     fn.is_refresh = True
     return fn
 
@@ -86,6 +91,7 @@ class Feature(me.Document):
             s += '\n' + status
         return s
 
+    @exposed
     def tree(self) -> str:
         """Produce a pretty-printed tree of all this Feature's
         dependents.
@@ -101,6 +107,7 @@ class Feature(me.Document):
         return [p for p in class_dict if hasattr(class_dict[p], 'is_refresh') and
                 not p.startswith('_')]  # ignore self._collections
 
+    @exposed
     def properties(self):
         """
         TODO real properties docstring
@@ -112,6 +119,7 @@ class Feature(me.Document):
         for prop in self._properties():
             messages.pprint_func(prop, self.__class__.__dict__[prop].__doc__)
 
+    @exposed
     def call_records(self, **kwargs) -> me.QuerySet:
         """Return a list of CallRecords associated with this Feature.
 
@@ -139,6 +147,7 @@ class Feature(me.Document):
         """
         return
 
+    @exposed
     def set_expired(self, is_expired: bool = True) -> None:
         """Provide an interface to manually set the expiration state of a feature.
         """
