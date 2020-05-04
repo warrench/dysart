@@ -207,19 +207,20 @@ class Feature(me.Document):
         parent object, to the corresponding parent objects.
 
         """
-        return {key: self.__get_parent(key) for key in self.parent_ids}
+        return {key: self._get_parent(key) for key in self.parent_ids}
 
-    def __get_parent(self, parent_key):
+    def _get_parent(self, parent_key: str):
         """Returns the parent associated with a parent key. This is an internal
         method used by the `parents` property.
 
+        Args:
+            parent_key: The parent key to look up
+        Returns: the parent Feature in the context that is passed in.
+
+        Raises: KeyError
+
         """
-        parents = Feature.objects(id=self.parent_ids[parent_key])
-        if len(parents) == 0:
-            raise me.errors.DoesNotExist
-        if len(parents) > 1:
-            raise me.errors.MultipleObjectsReturned
-        return parents[0]
+        return self.ctx[self.parent_ids[parent_key]]
 
     async def expired_ancestors(self) -> OrderedDict:
         """Returns a list of ancestors that are expired, in topological-sorted
@@ -235,11 +236,23 @@ class Feature(me.Document):
             acc.update(ancestors)
 
         # If any parent is expired, or this one has been flagged, schedule this for refresh.
-        expired = acc or self.manual_expiration_switch
-        expired |= (await self.exec_async_dunder('expiration_hook')) == ExpirationStatus.EXPIRED
+        expired = (len(acc) > 0)
+        exp_hook_res = (await self.exec_async_dunder('expiration_hook'))
+        expired |= exp_hook_res == ExpirationStatus.EXPIRED
+        expired |= self.expiry_override()
         if expired:
             acc[self] = True
         return acc
+    
+    def expiry_override(self) -> bool:
+        """A hard override function that may be overridden (excuse me) by
+        subclasses to provide additional incontrovertible expiry conditions,
+        such as the absence of an existing measurement result.
+
+        Returns:
+
+        """
+        return self.manual_expiration_switch
     
     async def is_expired(self) -> bool:
         """
@@ -247,7 +260,7 @@ class Feature(me.Document):
         Returns:
 
         """
-        return bool(await self.expired_ancestors())
+        return len(await self.expired_ancestors()) > 0
 
     def add_parents(self, new_parents: Dict):
         """Insert dependencies into the feature's parents dictionary and

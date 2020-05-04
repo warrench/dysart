@@ -161,9 +161,6 @@ class Dyserver(service.Service):
             keep multiple refreshes in flight at once.
         """
         scheduled_features = await feature.expired_ancestors()
-        print(f"Feature: {feature.id}\n", 
-              getattr(feature, "__expiration_hook__"),
-              scheduled_features)
         for scheduled_feature in scheduled_features:
             record = CallRecord(
                 remote=request.remote,
@@ -198,7 +195,8 @@ class Dyserver(service.Service):
 
         # Rolling my own remote object protocol...
         try:
-            feature = self.project.features[data['feature']]
+            id = self.project.feature_ids[data['feature']]
+            feature = self.project.features[id]
         except KeyError:
             raise web.HTTPNotFound(
                 reason=f"Feature {data['feature']} not found"

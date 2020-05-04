@@ -29,7 +29,8 @@ class Project:
 
         self.feature_modules = {}    # Feature modules that have been included
         self.hook_modules = {}       # Hook modules that have been included
-        self.features = {}           # Features that have been included
+        self.features = {}           # Features that have been included, indexed by ID
+        self.feature_ids = {}        # IDs indexed by feature name
 
         # Next, import the libraries specified in the project specification
         for mod_path in proj_yaml['Modules']['Features']:
@@ -222,5 +223,9 @@ class Project:
         # seems a little ugly to me, and is a possible source of future bugs.
         attach_hook('expiration_hook', method_type=True)
 
-        # Finally, put the feature into the project namespace
-        self.features[feature_name] = feature
+        # Finally, put the feature into the project namespace. The extra layer
+        # of indirection here makes it painless to do parent lookups from a
+        # context attached to the features.
+        self.feature_ids[feature_name] = feature_id
+        self.features[feature_id] = feature
+        feature.ctx = self.features

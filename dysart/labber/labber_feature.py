@@ -60,8 +60,9 @@ LOCK = asyncio.Lock()
 class result:
     """This decorator class annotates a result-yielding method of a Labber feature.
     """
-    
+
     is_refresh = True
+    exposed = True
 
     def __init__(self, fn: Callable) -> None:
         """This accepts a 'result-granting' function and returns a refresh function
@@ -252,6 +253,47 @@ class LabberFeature(Feature):
                                       conf.config['labber_data_dir'],
                                       os.path.split(self.output_file_path)[-1])
 
+    def __params__(self):
+        """Fixes parameters that may be inherited from parents.
+
+        Returns: A dictionary containing the new parameter settings
+
+        """
+        return {}
+
+    async def __call__(self, initiating_call=None, **kwargs):
+        """
+        Thinly wrap the Labber API
+
+        TODO: this is really kind of ugly code
+        """
+        # Handle the keyword arguments by appropriately modifying the config
+        # file. This is sort of a stopgap; I'm not really sure it behaves how
+        # we want in production.
+        params = self.__params__()
+        params.update(kwargs)
+        for key in params:
+            self.set_value(key, params[key])
+
+        # Make call to Labber!
+        self.labber_input_file = self.emit_labber_input_file()
+        self.labber_output_file = self.log_history.next_log_path()
+        async with LOCK:
+            self.config.performMeasurement()
+        # Clean up: tempfile no longer needed.
+        os.unlink(self.labber_input_file)
+
+    def expiry_override(self) -> bool:
+        """A hard override function that may be overridden (excuse me) by
+        subclasses to provide additional incontrovertible expiry conditions,
+        such as the absence of an existing measurement result.
+
+        Returns:
+
+        """
+        expired = super().expiry_override()
+        return expired or (len(self.log_history) == 0)
+    
     # If this turns out to be visibly slow, can be replaced with some metaclass
     # magic
     def _result_methods(self) -> List[callable]:
@@ -299,26 +341,6 @@ class LabberFeature(Feature):
             s += ' ' + messages.cstr(m, 'italic') + ' ' * (max_method_len - len(m))\
                     + ' : {}\n'.format(val_f)
         return s
-
-    async def __call__(self, initiating_call=None, **kwargs):
-        """
-        Thinly wrap the Labber API
-
-        TODO: this is really kind of ugly code
-        """
-        # Handle the keyword arguments by appropriately modifying the config
-        # file. This is sort of a stopgap; I'm not really sure it behaves how
-        # we want in production.
-        for key in kwargs:
-            self.set_value(key, kwargs[key])
-
-        # Make call to Labber!
-        self.labber_input_file = self.emit_labber_input_file()
-        self.labber_output_file = self.log_history.next_log_path()
-        async with LOCK:
-            self.config.performMeasurement()
-        # Clean up: tempfile no longer needed.
-        os.unlink(self.labber_input_file)
 
     def all_results(self, index=-1) -> dict:
         """Returns a dict containing all the result values, even if they haven't been
