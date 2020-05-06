@@ -24,7 +24,7 @@ from Labber import ScriptTools as st
 
 from dysart.labber.labber_serialize import load_labber_scenario_as_dict
 from dysart.labber.labber_serialize import save_labber_scenario_from_dict
-from dysart.feature import Feature, CallRecord, refresh
+from dysart.feature import Feature, CallRecord, refresh, exposed
 import dysart.messages.messages as messages
 from dysart.messages.errors import UnsupportedPlatformError
 import toplevel.conf as conf
@@ -57,7 +57,7 @@ LOCK = asyncio.Lock()
 
 # NOTE: This lower-case name is intended! This class is meant to be used as a
 # method decorator.
-class result:
+class result(exposed):
     """This decorator class annotates a result-yielding method of a Labber feature.
     """
 
@@ -262,10 +262,7 @@ class LabberFeature(Feature):
         return {}
 
     async def __call__(self, initiating_call=None, **kwargs):
-        """
-        Thinly wrap the Labber API
-
-        TODO: this is really kind of ugly code
+        """Thinly wrap the Labber API
         """
         # Handle the keyword arguments by appropriately modifying the config
         # file. This is sort of a stopgap; I'm not really sure it behaves how
@@ -294,59 +291,32 @@ class LabberFeature(Feature):
         expired = super().expiry_override()
         return expired or (len(self.log_history) == 0)
     
-    # If this turns out to be visibly slow, can be replaced with some metaclass
-    # magic
-    def _result_methods(self) -> List[callable]:
+    def result_methods(self) -> List[callable]:
         """Gets a list of all the methods of this class annotated with @result
         """
-        __old_stdout = sys.stdout
-        sys.stdout = open(os.devnull, 'w')
-        methods = [getattr(self, name) for name in dir(self)
-                          if isinstance(getattr(self, name, None), result)]
-        sys.stdout = __old_stdout
-        return methods
+        return [getattr(self, name) for name in dir(self)
+                if isinstance(getattr(self, name, None), result)]
 
-    def result_methods(self) -> None:
-        """Pretty-prints a list of all the methods of this class annotated with
-        @result
-        """
-        print('')
-        for m in self._result_methods():
-            messages.pprint_func(m.__name__, m.__doc__)
-            # messages.pprint_func(prop, self.__class__.__dict__[prop].__doc__)
-
-    def _status(self) -> str:
-        """Overriding Feature._status, this method returns a formatted report on the
+    def _repr_dict_(self) -> dict:
+        """Overriding Feature.repr_table, this method returns a formatted report on the
         easily-representable (i.e. scalar-valued) result methods.
         """
-        result_methods = [m.__name__ for m in self._result_methods()]
-        max_method_len = max(map(len, result_methods)) if result_methods else 0
-
-        s = ''
-        for m in result_methods:
-            results_history = self.get_results_history(m)
-            val_f = None
-            for i, val in enumerate(results_history):
-                # If the most recent result exists, format it with 'ok' status
-                if val is not None:
-                    status_code = 'ok' if isinstance(val, numbers.Number) else 'warn'
-                    if isinstance(val, numbers.Number):
-                        val_f = messages.cstr('{:+.6e}'.format(val), status_code)
-                    else:
-                        val_f = messages.cstr('Non-numeric result', status_code)
-                    break
-            if val_f is None:
-                val_f = messages.cstr('No result calculated', 'fail')
-            # TODO figure out how nested format strings; then write this with one
-            s += ' ' + messages.cstr(m, 'italic') + ' ' * (max_method_len - len(m))\
-                    + ' : {}\n'.format(val_f)
-        return s
+        table = {
+            'id': self.id,
+        }
+        
+        results = self.all_results()
+        for key, val in results.items():
+            if not isinstance(val, numbers.Number):
+                results[key] = 'Non-numeric result'
+        table['results'] = results
+        return table
 
     def all_results(self, index=-1) -> dict:
         """Returns a dict containing all the result values, even if they haven't been
         computed before."""
         d = {}
-        for method in self._result_methods():
+        for method in self.result_methods():
             d[method.__name__] = method(index=index)
         return d
 
@@ -398,6 +368,7 @@ class LabberFeature(Feature):
             Exception("I don't know what to do with this value")
 
         self.template_diffs[label] = canonicalized_value
+        self.save()
 
     def merge_configs(self):
         """TODO write a real docstring here

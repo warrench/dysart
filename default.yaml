@@ -29,5 +29,7 @@ dys_path: ~/equs/QMIT/dysart
 
 labber_data_dir: ~/equs/QMIT/dysart/debug_data/labber
 
-# This is the project configuration that will be loaded on startup
-default_proj: ~/equs/QMIT/dysart/dysart/equs_std/equs_demo.yaml
+# These are the projects known to the server. I'm not sure about keeping this
+# in the database--for now, they'll live in configuration.
+projects:
+  demo: ~/equs/QMIT/dysart/dysart/equs_std/equs_demo.yaml

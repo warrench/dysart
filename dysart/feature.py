@@ -29,10 +29,27 @@ class ExpirationStatus(enum.Enum):
     EXPIRED = enum.auto()
 
 
-def exposed(fn):
-    fn.exposed = True
-    return fn
-    
+class exposed:
+    """This decorator class annotates a method that is exposed by the client-
+    facing API.
+    """
+
+    exposed = True
+
+    def __init__(self, fn: Callable) -> None:
+        self.fn = fn
+        self.__name__ = fn.__name__
+        self.__doc__ = fn.__doc__
+
+    def __get__(self, obj, objtype):
+        """Hack to bind this callable to the parent object.
+        """
+        self.obj = obj
+        return self
+
+    def __call__(self, *args, **kwargs):
+        return self.fn(self.obj, *args, **kwargs)
+
 def refresh(fn):
     """Decorator that flags a method as having dependencies and possibly requiring
     a refresh operation. Refresh methods are always exposed.
@@ -188,7 +205,6 @@ class Feature(me.Document):
         try:
             await self.exec_async_dunder('pre_hook', record)
             # Call the feature.
-            # TODO what do I do with the starargs?
             return_value = await self.exec_async_dunder('call')
             await self.exec_async_dunder('validation_hook', record, return_value)
             self.manual_expiration_switch = False
@@ -269,6 +285,12 @@ class Feature(me.Document):
         for parent_key, parent_id in new_parents.items():
             self.parent_ids[parent_key] = parent_id
         self.save()
+
+    def exposed_methods(self) -> List[callable]:
+        """Gets a list of all the methods of this class annotated with @result
+        """
+        return [getattr(self, name) for name in dir(self)
+                if isinstance(getattr(self, name, None), exposed)]
 
 
 class CallStatus(enum.Enum):

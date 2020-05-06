@@ -185,7 +185,3 @@ if __name__ == '__main__':
 
     dyserver = Dyserver()
     start(dyserver)
-    messages.configure_logging(logfile=dyserver.logfile)  # should all be managed by server
-
-    load_project(config['default_proj'])
-    print_feature_dag()

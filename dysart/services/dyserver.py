@@ -29,9 +29,11 @@ value returned.
 """
 
 from io import StringIO
+import json
 import pickle
 import socket
 
+from dysart.feature import exposed
 from dysart.messages.messages import StatusMessage
 from dysart.messages.errors import *
 import dysart.project as project
@@ -86,7 +88,6 @@ class Dyserver(service.Service):
         self.db_connect(self.db_host, self.db_port)
         self.labber_connect(self.labber_host)
         self.job_scheduler.start('{}Starting job scheduler...'.format(messages.TAB))
-        self.load_project(conf.config['default_proj'])
         web.run_app(self.app, host=self.hostname, port=self.port)
 
     def _stop(self) -> None:
@@ -168,42 +169,64 @@ class Dyserver(service.Service):
                 hostname=socket.gethostname()
             )
             await scheduled_feature.exec_feature(record)
+            
+    async def feature_get_handler(self, request):
+        """Handles requests that only retrieve data about Features.
+        For now, it simply retrieves the values of all `refresh`
+        methods attached to the Feature.
 
-    async def feature_method_handler(self, request):
+        Args:
+            request:
+
+        Returns: A json object with the format,
+        {
+            'name': name,
+            'id': id,
+            'results': {
+                row_1: val_1,
+                ...
+                row_n: val_n
+            }
+        }
+
         """
+        await self.authorize(request)
+        data = await request.json()
+        try:
+            feature_id = self.project.feature_ids[data['feature']]
+            feature = self.project.features[feature_id]
+        except KeyError:
+            raise web.HTTPNotFound(
+                reason=f"Feature {data['feature']} not found"
+            )
+        
+        response_data = feature._repr_dict_()
+        response_data['name'] = data['feature']
+        return web.Response(body=json.dumps(response_data))
+
+    async def feature_post_handler(self, request):
+        """Handles requests that may mutate state.
         
         Args:
-            request: 
+            request: request data is expected to have the fields,
+            `project`, `feature`, `method`, `args`, and `kwargs`.
 
         Returns:
 
         """
         await self.authorize(request)
         data = await request.json()
-        
-        # `data` is expected to be of the form,
-        # 
-        # data = {
-        #     'project': proj.name,
-        #     'feature': self.feature.name,
-        #     'method': self.name,
-        #     'args': args,
-        #     'kwargs': kwargs
-        # }
-        #
-        # NOTE the 'project' field is ignored for now
-
         # Rolling my own remote object protocol...
         try:
-            id = self.project.feature_ids[data['feature']]
-            feature = self.project.features[id]
+            feature_id = self.project.feature_ids[data['feature']]
+            feature = self.project.features[feature_id]
         except KeyError:
             raise web.HTTPNotFound(
                 reason=f"Feature {data['feature']} not found"
             )
         
         method = getattr(feature, data['method'], None)
-        if not hasattr(method, 'exposed'):
+        if not isinstance(method, exposed):
             # This exception will be raised if there is no such method *or* if
             # the method is unexposed.
             raise web.HTTPNotFound(
@@ -216,13 +239,57 @@ class Dyserver(service.Service):
         return_value = method(*data['args'], **data['kwargs'])
         return web.Response(body=pickle.dumps(return_value))
 
+    async def project_post_handler(self, request):
+        """Handles project management-related requests. For now,
+        this just loads/reloads the sole project in server memory.
+
+        Args:
+            request: request data is expected to have the field,
+            `project`.
+
+        Returns:
+
+        """
+        await self.authorize(request)
+        data = await request.json()
+        
+        def exposed_method_names(feature_id: str):
+            return [m.__name__ for m in
+                    self.project.features[feature_id].exposed_methods()]
+            
+        try:
+            self.load_project(conf.config['projects'][data['project']])
+            proj = self.project
+            graph = proj.feature_graph()
+            body = {
+                'graph': graph,
+                'features': {
+                    name: exposed_method_names(feature_id)
+                    for name, feature_id in proj.feature_ids.items()
+                }
+            }
+            response = web.Response(body=json.dumps(body))
+        except KeyError:
+            response = web.HTTPNotFound(
+                reason=f"Project {data['project']} not found"
+            )
+        return response
+
     async def test_handler(self, request):
         print('Running test handler!')
         return web.Response(text="hello, world!")
     
     def setup_routes(self):
         self.app.router.add_get('/', self.test_handler)
-        self.app.router.add_post('/remote/feature', self.feature_method_handler)
+        self.app.router.add_post('/feature', self.feature_post_handler)
+        self.app.router.add_get('/feature', self.feature_get_handler)
+        self.app.router.add_post('/project', self.project_post_handler)
+
+
+class Request(me.Document):
+    # TODO
+    pass
+        
 
 class LabberContext:
     """A context manager to wrap connections to Labber and capture errors

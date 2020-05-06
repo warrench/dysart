@@ -2,7 +2,7 @@ import importlib.util
 import os
 import sys
 import types
-from typing import Dict, Callable, List
+from typing import *
 
 from dysart.messages.errors import ValidationError, ModuleNotFoundError
 import toplevel.conf as conf
@@ -229,3 +229,22 @@ class Project:
         self.feature_ids[feature_name] = feature_id
         self.features[feature_id] = feature
         feature.ctx = self.features
+    
+    def feature_graph(self) -> List[Tuple[str, str]]:
+        """Returns an edge representation of the dag, labelled by project
+        feature names.
+        
+        Returns: A list of tuples containing all the (parent, child)
+        pairs in the graph, by feature name.
+
+        Todo:
+            This is a silly O(n^2) algorithm. It's a mild bother to do
+            an O(m) one, but rewrite if this becomes slow.
+        """
+        edges = []
+        for child in self.feature_ids:
+            child_feature = self.features[self.feature_ids[child]]
+            for parent in self.feature_ids:
+                if self.feature_ids[parent] in child_feature.parent_ids.values():
+                    edges.append((parent, child))
+        return edges
