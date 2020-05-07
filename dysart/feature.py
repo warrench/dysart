@@ -83,31 +83,6 @@ class Feature(me.Document):
         super().__init__(**kwargs)
         self.save()
 
-    def _status(self) -> str:
-        """
-        returns a pretty-printed string containing detailed information about
-        the feature's current status; e.g. the details of recently-found
-        fitting parameters. Should be overridden by derived classes.
-        """
-        return ''
-
-    def __str__(self):
-        """should report its name, most-derived (?) type, parents, and names and
-        expiration statuses thereof.
-        """
-        # Initialize as object name with type judgment
-        if self.expired():
-            s = messages.cstr('[EXP]', 'fail')
-        else:
-            s = messages.cstr('[OK]', 'ok')
-        # Descriptor of this feature
-        s += '\t: ' + messages.cstr(self.__class__.__name__, 'bold')
-        # This feature's status
-        status = self._status()
-        if status:
-            s += '\n' + status
-        return s
-
     @exposed
     def tree(self) -> str:
         """Produce a pretty-printed tree of all this Feature's
@@ -132,7 +107,6 @@ class Feature(me.Document):
         Pretty-print a human-readable description of all the object's property
         methods
         """
-        print('')
         for prop in self._properties():
             messages.pprint_func(prop, self.__class__.__dict__[prop].__doc__)
 
@@ -170,9 +144,6 @@ class Feature(me.Document):
         """
         self.manual_expiration_switch = is_expired
         self.save()
-    
-    def expired(self) -> bool:
-        return True
     
     async def exec_async_dunder(self, hook: str, *args) -> Any:
         """Executes a named hook, if one exists, whether it is synchronous or

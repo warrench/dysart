@@ -250,8 +250,6 @@ class LabberFeature(Feature):
         # Handle the keyword arguments by appropriately modifying the config
         # file. This is sort of a stopgap; I'm not really sure it behaves how
         # we want in production.
-        params = self.__params__()
-
         # Make call to Labber!
         self.labber_input_file = self.emit_labber_input_file()
         self.labber_output_file = self.log_history.next_log_path()
@@ -353,10 +351,10 @@ class LabberFeature(Feature):
         """Merge the template and diff configuration dictionaries, in preparation
         for serialization
         """
-        # TODO actually do it. For now, just return the most naive thing possible.
         new_config = copy.deepcopy(self.template)
-        for diff_key in self.template_diffs:
-            vals = self.template_diffs[diff_key]
+        diffs = {**self.template_diffs, **self.__params__()}
+        for diff_key in diffs:
+            vals = diffs[diff_key]
             channels = [c for c in new_config['step_channels'] if
                        c['channel_name'] == diff_key]
             if not channels:
@@ -365,9 +363,6 @@ class LabberFeature(Feature):
                 new_config['step_channels'].append(channel)
             else:
                 channel = channels[0]
-
-            if not 'step_items' in channel:
-                channel['step_items'] = [{}]
             items = channel['step_items'][0]
 
             # Resolve a 3-tuple as (start, stop, n_pts).
