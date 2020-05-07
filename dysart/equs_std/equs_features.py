@@ -18,14 +18,6 @@ qubit_spec_file = os.path.join(template_path, 'qubit_spec.json')
 qubit_spec_file_out = os.path.join(template_path, 'qubit_spec_out.hdf5')
 
 
-class ResonatorSpectrum(LabberFeature):
-    pass
-
-
-class Qubit:
-    pass
-
-
 class QubitSpectrum(LabberFeature):
     """
     Feature object for the spectrum of a qubit. For the purposes of an initial
@@ -105,14 +97,10 @@ class QubitRabi(LabberFeature):
         default='Single-Qubit Simulator - Polarization - Z'
     )
 
-    def __call__(self, initiating_call=None, **kwargs):
-        # Obtain parameters from parents
+    def __params__(self):
         center_freq = self.parents['spec'].center_freq()
         freq_channel = self.parents['spec'].drive_frequency_channel
-
-        # RPC to labber and save data
-        super().__call__(initiating_call=initiating_call,
-                         freq_channel=center_freq)
+        return {freq_channel: center_freq}
 
     @result
     def fit(self, index=-1):

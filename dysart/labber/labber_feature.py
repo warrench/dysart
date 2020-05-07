@@ -8,7 +8,6 @@ etc.
 
 import asyncio
 import os
-import sys
 import copy
 from functools import wraps
 import numbers
@@ -24,8 +23,8 @@ from Labber import ScriptTools as st
 
 from dysart.labber.labber_serialize import load_labber_scenario_as_dict
 from dysart.labber.labber_serialize import save_labber_scenario_from_dict
-from dysart.feature import Feature, CallRecord, refresh, exposed
-import dysart.messages.messages as messages
+import dysart.labber.labber_util as labber_util
+from dysart.feature import Feature, CallRecord, exposed
 from dysart.messages.errors import UnsupportedPlatformError
 import toplevel.conf as conf
 
@@ -44,16 +43,8 @@ elif platform.system() == 'Windows':
 else:
     raise UnsupportedPlatformError
 
-"""
-Register default labber client. Using a global variable is maybe all right for
-testing, but this is a pretty dangerous practice in production code.
-"""
-default_client = globals().get('dyserver')
-
-# This class-variable lock is used to synchronize calls to Labber in an async
-# context.
+# This mutex is used to synchronize calls to the Labber API
 LOCK = asyncio.Lock()
-
 
 # NOTE: This lower-case name is intended! This class is meant to be used as a
 # method decorator.
@@ -229,21 +220,13 @@ class LabberFeature(Feature):
     template_file_path = ''
     output_file_path = ''
 
-    def __init__(self, labber_client=default_client, **kwargs):
-        if labber_client:
-            self.labber_client = labber_client
+    def __init__(self, **kwargs):
 
         super().__init__(**kwargs)
         # Check to see if the template file has been saved in the DySART database;
         # if not, deserialize the .hdf5 on disk.
         if not self.template:
             self.deserialize_template()
-
-        # Set nondefault parameters
-        # TODO: use Antti's wrapper code here
-
-        # for kwarg in kwargs:
-        #    self.set_value(kwarg, kwargs[kwarg])
 
         # Deprecated by Simon's changes to Labber API?
         self.config = st.MeasurementObject(self.template_file_path,
@@ -261,16 +244,13 @@ class LabberFeature(Feature):
         """
         return {}
 
-    async def __call__(self, initiating_call=None, **kwargs):
+    async def __call__(self):
         """Thinly wrap the Labber API
         """
         # Handle the keyword arguments by appropriately modifying the config
         # file. This is sort of a stopgap; I'm not really sure it behaves how
         # we want in production.
         params = self.__params__()
-        params.update(kwargs)
-        for key in params:
-            self.set_value(key, params[key])
 
         # Make call to Labber!
         self.labber_input_file = self.emit_labber_input_file()
@@ -290,7 +270,7 @@ class LabberFeature(Feature):
         """
         expired = super().expiry_override()
         return expired or (len(self.log_history) == 0)
-    
+
     def result_methods(self) -> List[callable]:
         """Gets a list of all the methods of this class annotated with @result
         """
@@ -304,7 +284,6 @@ class LabberFeature(Feature):
         table = {
             'id': self.id,
         }
-        
         results = self.all_results()
         for key, val in results.items():
             if not isinstance(val, numbers.Number):
@@ -330,8 +309,7 @@ class LabberFeature(Feature):
                 for index in reversed(range(len(self.results))))
 
     def deserialize_template(self):
-        """
-        Unmarshall the template file.
+        """Unmarshall the template file.
         """
 
         """
@@ -346,9 +324,9 @@ class LabberFeature(Feature):
         self.template = load_labber_scenario_as_dict(self.template_file_path,
                             decode_complex=False)
 
+    @exposed
     def set_value(self, label, value):
-        """
-        Simply wrap the Labber API
+        """Simply wrap the Labber API
         """
 
         # Explicit type-checking (and behavior dependent on the result) seems really
@@ -368,11 +346,11 @@ class LabberFeature(Feature):
             Exception("I don't know what to do with this value")
 
         self.template_diffs[label] = canonicalized_value
+        self.manual_expiration_switch = True
         self.save()
 
     def merge_configs(self):
-        """TODO write a real docstring here
-        Merge the template and diff configuration dictionaries, in preparation
+        """Merge the template and diff configuration dictionaries, in preparation
         for serialization
         """
         # TODO actually do it. For now, just return the most naive thing possible.
@@ -381,20 +359,32 @@ class LabberFeature(Feature):
             vals = self.template_diffs[diff_key]
             channels = [c for c in new_config['step_channels'] if
                        c['channel_name'] == diff_key]
-            channel = {} if not channels else channels[0]
+            if not channels:
+                channel = labber_util.new_channel()
+                channel['channel_name'] = diff_key
+                new_config['step_channels'].append(channel)
+            else:
+                channel = channels[0]
+
+            if not 'step_items' in channel:
+                channel['step_items'] = [{}]
+            items = channel['step_items'][0]
+
             # Resolve a 3-tuple as (start, stop, n_pts).
             # For now, let's *only* handle linear interpolation
             if isinstance(vals, tuple):
                 # It's wrapped in a list: if our assumption that it's length 1
                 # is wrong, let us know. We'll pull in Antti's code to do this
                 # correctly.
-                items = channel['step_items'][0]
                 items['start'] = vals[0]
                 items['stop'] = vals[1]
                 items['n_pts'] = vals[2]
                 items['center'] = (vals[0] + vals[1]) / 2
                 items['span'] = vals[1] - vals[0]
                 items['step'] = items['span'] / items['n_pts']
+            elif isinstance(vals, (int, float, complex)):
+                items['range_type'] = 'Single'
+                items['single'] = vals
         return new_config
 
     def emit_labber_input_file(self) -> str:
@@ -409,7 +399,7 @@ class LabberFeature(Feature):
         TODO UPDATE: the /proc tree doesn't exist on MacOS. Must use a
         different interface on that platform.
         """
-        if 'temp' in dir(self) and not self.temp.closed:
+        if hasattr(self, 'temp') and not self.temp.closed:
             self.temp.close()
         temp_dir = '/tmp' if platform.system() in ['Linux', 'Darwin']\
                           else 'C:\\Windows\\Temp'
@@ -422,14 +412,14 @@ class LabberFeature(Feature):
         save_labber_scenario_from_dict(fp, self.merge_configs())
         return fp
 
-    @property
+    @exposed
     def diffs(self):
         """TODO write a real docstring here
         TODO write a real method here
         Pretty-print all the user-specified configuration parameters that
         differ from the template file
         """
-        print(self.template_diffs)
+        return self.template_diffs
 
     @property
     def labber_input_file(self):

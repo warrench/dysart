@@ -153,7 +153,7 @@ class Feature(me.Document):
         for record in self.call_records():
             print(record)
 
-    def __call__(self, initiating_call=None, **kwargs):
+    def __call__(self):
         """Feature is callable. This method does whatever is needed to update an
         expired feature. By default, calling the instance only refreshes and
         logs. Unless overwritten, just updates the time-since-refresh and
@@ -199,6 +199,9 @@ class Feature(me.Document):
             record:
 
         Returns:
+            
+        Todo:
+            Propagate `manual_expiration_switch` to children.
 
         """
         record.setup()

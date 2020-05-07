@@ -236,6 +236,7 @@ class Dyserver(service.Service):
         if hasattr(method, 'is_refresh'):
             await self.refresh_feature(feature, request)
         
+        print(f"Calling method `{data['method']}` of feature `{data['feature']}`")
         return_value = method(*data['args'], **data['kwargs'])
         return web.Response(body=pickle.dumps(return_value))
 
@@ -258,6 +259,7 @@ class Dyserver(service.Service):
                     self.project.features[feature_id].exposed_methods()]
             
         try:
+            print(f"Loading project `{data['project']}`")
             self.load_project(conf.config['projects'][data['project']])
             proj = self.project
             graph = proj.feature_graph()
@@ -275,15 +277,26 @@ class Dyserver(service.Service):
             )
         return response
 
-    async def test_handler(self, request):
-        print('Running test handler!')
-        return web.Response(text="hello, world!")
+    async def debug_handler(self, request):
+        """A handler invoked by a client-side request to transfer control
+        of the server process to a debugger. This feature should be disabled
+        without admin authentication
+        
+        Args:
+            request: 
+
+        Returns:
+
+        """
+        print('Running debug handler!')
+        breakpoint()
+        return web.Response()
     
     def setup_routes(self):
-        self.app.router.add_get('/', self.test_handler)
         self.app.router.add_post('/feature', self.feature_post_handler)
         self.app.router.add_get('/feature', self.feature_get_handler)
         self.app.router.add_post('/project', self.project_post_handler)
+        self.app.router.add_post('/debug', self.debug_handler)
 
 
 class Request(me.Document):

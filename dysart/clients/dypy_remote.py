@@ -8,6 +8,7 @@ remote-object protocol to access Feature methods.
 import json
 import numbers
 import pickle
+import random
 from typing import *
 
 import requests
@@ -21,6 +22,13 @@ class Client:
     """
     """
 
+    cheerful_messages = [
+        "Happy measuring!",
+        "Have a five-sigma day in lab!",
+        "May all your results be statistically significant.",
+        "I hope your data looks as good as you do today!",
+    ]
+
     def __init__(self, hostname: str, port: int, verbose: bool = True):
         self.hostname = hostname
         self.port = port
@@ -28,6 +36,7 @@ class Client:
         self.verbose = verbose
 
     def project(self, name: str, token: Optional[str] = None):
+
         url = self.url + '/project'
         data = {
             'project': name,
@@ -43,9 +52,24 @@ class Client:
                 setattr(feature, method_name, method)
             setattr(proj, feature_name, feature)
         if verbose:
-            print(f"Loaded project `{name}`. Happy measuring!")
+            print(f"Loaded project `{name}`.", random.choice(self.cheerful_messages))
             display_graph(response_data['graph'])
         return proj
+    
+    def debug(self):
+        """Suspends execution of the server process and transfers control
+        to a debugger. Invocation of this request should be forbidden by
+        the server except with admin authentication
+
+        Returns:
+
+        """
+        if verbose:
+            print("Attempting to suspend execution... ")
+        response = requests.post(self.url + '/debug')
+        response.raise_for_status()
+        if verbose:
+            print("Resumed.")
 
 
 class RemoteProject:
@@ -100,6 +124,8 @@ class RemoteProcedureCall:
             'args': args,
             'kwargs': kwargs
         }
+        if verbose:
+            print("Issuing request... ")
         response = requests.post(self.feature.url, json=data)
         return RemoteProcedureCall.interp_response(response)
 
@@ -117,7 +143,7 @@ def feature_html_table(repr: dict) -> str:
         `name`, `id`, and `results`.
         }
 
-    Returns: An HTML object representing
+    Returns: An HTML string representing the state of the Feature.
 
     """
     html = []
@@ -163,5 +189,3 @@ if __name__ == '__main__':
     proj = RemoteProject(name='equs_demo',
                          hostname='127.0.0.1',
                          port=8000)
-
-
