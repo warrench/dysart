@@ -2,7 +2,7 @@ import importlib.util
 import os
 import sys
 import types
-from typing import Dict, Callable, List
+from typing import *
 
 from dysart.messages.errors import ValidationError, ModuleNotFoundError
 import toplevel.conf as conf
@@ -29,7 +29,8 @@ class Project:
 
         self.feature_modules = {}    # Feature modules that have been included
         self.hook_modules = {}       # Hook modules that have been included
-        self.features = {}           # Features that have been included
+        self.features = {}           # Features that have been included, indexed by ID
+        self.feature_ids = {}        # IDs indexed by feature name
 
         # Next, import the libraries specified in the project specification
         for mod_path in proj_yaml['Modules']['Features']:
@@ -91,7 +92,7 @@ class Project:
         namespace
         """
         dysart_hook_dir = os.path.join(
-            os.path.expanduser(conf.config['DYS_PATH']), 'dysart', 'hooks')
+            os.path.expanduser(conf.config['dys_path']), 'dysart', 'hooks')
         search_path = [os.path.dirname(self.path), dysart_hook_dir]
         module_name, mod = Project.__load_module(mod_path, search_path)
         self.hook_modules.update({module_name: mod})
@@ -222,5 +223,28 @@ class Project:
         # seems a little ugly to me, and is a possible source of future bugs.
         attach_hook('expiration_hook', method_type=True)
 
-        # Finally, put the feature into the project namespace
-        self.features[feature_name] = feature
+        # Finally, put the feature into the project namespace. The extra layer
+        # of indirection here makes it painless to do parent lookups from a
+        # context attached to the features.
+        self.feature_ids[feature_name] = feature_id
+        self.features[feature_id] = feature
+        feature.ctx = self.features
+    
+    def feature_graph(self) -> List[Tuple[str, str]]:
+        """Returns an edge representation of the dag, labelled by project
+        feature names.
+        
+        Returns: A list of tuples containing all the (parent, child)
+        pairs in the graph, by feature name.
+
+        Todo:
+            This is a silly O(n^2) algorithm. It's a mild bother to do
+            an O(m) one, but rewrite if this becomes slow.
+        """
+        edges = []
+        for child in self.feature_ids:
+            child_feature = self.features[self.feature_ids[child]]
+            for parent in self.feature_ids:
+                if self.feature_ids[parent] in child_feature.parent_ids.values():
+                    edges.append((parent, child))
+        return edges

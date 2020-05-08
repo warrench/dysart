@@ -117,4 +117,4 @@ def install() -> None:
 
 def set_project_tree() -> None:
     """configures the default project tree"""
-    config['DEFAULT_PROJ'] = args.proj
+    config['default_proj'] = args.proj

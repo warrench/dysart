@@ -88,7 +88,7 @@ class Database(Service):
 
     def _start(self) -> None:
         if platform.system() in ('Darwin', 'Linux'):
-            command = f"""mongod --port {conf.config["DB_PORT"]} --fork --quiet
+            command = f"""mongod --port {conf.config["db_port"]} --fork --quiet
             --logappend --logpath {self.log_path} --dbpath {self.db_dir}
             """.split()
             self.completed_proc = subprocess.run(command, capture_output=True)
@@ -115,8 +115,8 @@ class Database(Service):
     def db_dir(self) -> str:
         # TODO it might actually be a little confusing that this is a property
         return os.path.join(
-            conf.DYS_PATH,
-            conf.config['DEFAULT_DB'],
+            conf.dys_path,
+            conf.config['default_db'],
             'db'
         )
 
@@ -124,8 +124,8 @@ class Database(Service):
     def log_dir(self) -> str:
         # TODO it might actually be a little confusing that this is a property
         return os.path.join(
-            conf.DYS_PATH,
-            conf.config['DEFAULT_DB'],
+            conf.dys_path,
+            conf.config['default_db'],
             'log'
         )
 

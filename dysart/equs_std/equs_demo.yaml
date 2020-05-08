@@ -42,8 +42,7 @@ Features:
       name: slack.to_users
       args: ['XXXXXXXXX']  # a Slack user ID
     expiration_hook:
-      name: expiration.timeout
-      kwargs: {minutes: 1}
+      name: expiration.always_fresh
 
   # Qubit driving
   qb_rabi:
@@ -53,9 +52,9 @@ Features:
     # its class. There is not yet any "static" or "import-time" checking
     # is done correctly by the user, so you might encounter strange
     # runtime errors if you make a mistake.
-    pre_hook:
-      name: hooks.debug
     parents:
       spec: qubit_spectrum_1
+    pre_hook:
+      name: hooks.debug
     expiration_hook:
-      name: expiration.always_expired
+      name: expiration.always_fresh

@@ -14,10 +14,8 @@ the last person who touched the system.
 
 import datetime as dt
 import enum
-from functools import wraps
-import getpass
 import hashlib
-import socket
+import inspect
 import sys
 from typing import *
 
@@ -31,104 +29,34 @@ class ExpirationStatus(enum.Enum):
     EXPIRED = enum.auto()
 
 
+class exposed:
+    """This decorator class annotates a method that is exposed by the client-
+    facing API.
+    """
+
+    exposed = True
+
+    def __init__(self, fn: Callable) -> None:
+        self.fn = fn
+        self.__name__ = fn.__name__
+        self.__doc__ = fn.__doc__
+
+    def __get__(self, obj, objtype):
+        """Hack to bind this callable to the parent object.
+        """
+        self.obj = obj
+        return self
+
+    def __call__(self, *args, **kwargs):
+        return self.fn(self.obj, *args, **kwargs)
+
 def refresh(fn):
     """Decorator that flags a method as having dependencies and possibly requiring
-    a refresh operation. Recursively refreshes ancestors, then checks an
-    additional condition `_expired()` specified by the Feature class. If the
-    feature or its ancestors have expired, perform the corrective operation
-    defined by the _______ method.
-
-    An advantage of using a refresh decorator to solve the dependency problem
-    is that a given feature may have a variety of public methods with the same
-    dependencies. This situation can be illustrated by a QubitRabi feature with
-    public methods `pi_time` and `pi_2_time` accessed as properties:
-
-        @refresh
-        def pi_time(self):
-            return self.data['pi_time']
-
-        @refresh
-        def pi_2_time(self):
-            return self.data['pi_2_time']
-
-    If we access qubit_rabi.pi_time followed by qubit_rabi.pi_2_time, they
-    should use the same measurement & fit results, from a single call to the
-    class's update method, to return these two values.
-
-    This is a pretty central feature, and it must be done right. This should be
-    a focus of any future code review, so
-
+    a refresh operation. Refresh methods are always exposed.
     """
-    @wraps(fn)
-    def wrapped_fn(*args, **kwargs):
-        """
-        The modified function passed to refresh.
-        """
-
-        feature = args[0]
-
-        # Generate new call record from initiating call record
-        # Ensure that initiating_call is defined
-        if 'initiating_call' in kwargs:
-            initiating_call = kwargs['initiating_call']
-            stack_level = initiating_call.stack_level + 1
-        else:
-            initiating_call = None
-            stack_level = 0
-
-        # And create the new call record.
-        record = CallRecord(
-            feature=feature,
-            method=fn.__name__,
-            initiating_call=initiating_call,
-            stack_level=stack_level,
-            user=getpass.getuser(),
-            hostname=socket.gethostname()
-        )
-        record.setup()
-
-        # First run the optional pre-hook, if any
-        if hasattr(feature, '__pre_hook__'):
-            feature.__pre_hook__(record)
-            
-        try:
-            # Call the Feature--this is the reason for this wrapper's existence
-            # TODO note that `is_stale` sounds like it just returns a boolean--
-            # but it has very significant side-effects. This is probably a
-            # symptom of poor design.
-            is_stale = feature.is_stale(record)
-            if is_stale:
-                feature(initiating_call=initiating_call)
-            # Update staleness parameter in case it was passed in with the function
-            # TODO: this currently only exists for the benefit of Feature.touch().
-            # That is *so* complex and unintuitive. What spaghetti code.
-            # If that method is removed, consider getting rid of this snippet, too.
-            if 'is_stale' in kwargs:
-                kwargs['is_stale'] = is_stale
-            # Call the requested function!
-            return_value = fn(*args, **kwargs)
-            
-            # Run the optional validation hook, if any 
-            if hasattr(feature, '__validation_hook__'):
-                feature.__validation_hook__(record, return_value)
-            
-            # Save any changes to the database
-            # feature.manual_expiration_switch = False
-            feature.save()
-            status = CallStatus.DONE
-        except Exception as e:
-            status = CallStatus.FAILED
-        finally:
-            record.conclude(status)
-            # Finally, run the optional post-hook, if any
-            if hasattr(feature, '__post_hook__'):
-                feature.__post_hook__(record)
-
-        # Finally, pass along return value of fn
-        return return_value
-    
-    wrapped_fn.is_refresh = True
-    return wrapped_fn
+    fn.exposed = True
+    fn.is_refresh = True
+    return fn
 
 
 class Feature(me.Document):
@@ -155,36 +83,12 @@ class Feature(me.Document):
         super().__init__(**kwargs)
         self.save()
 
-    def _status(self) -> str:
-        """
-        returns a pretty-printed string containing detailed information about
-        the feature's current status; e.g. the details of recently-found
-        fitting parameters. Should be overridden by derived classes.
-        """
-        return ''
-
-    def __str__(self):
-        """should report its name, most-derived (?) type, parents, and names and
-        expiration statuses thereof.
-        """
-        # Initialize as object name with type judgment
-        if self.expired():
-            s = messages.cstr('[EXP]', 'fail')
-        else:
-            s = messages.cstr('[OK]', 'ok')
-        # Descriptor of this feature
-        s += '\t: ' + messages.cstr(self.__class__.__name__, 'bold')
-        # This feature's status
-        status = self._status()
-        if status:
-            s += '\n' + status
-        return s
-
-    def tree(self) -> None:
-        """Draw to the terminal a pretty-printed tree of all this Feature's
+    @exposed
+    def tree(self) -> str:
+        """Produce a pretty-printed tree of all this Feature's
         dependents.
         """
-        print(messages.tree(self, lambda obj: self.parents.values()))
+        return messages.tree(self, lambda obj: self.parents.values())
 
     def _properties(self):
         """
@@ -195,6 +99,7 @@ class Feature(me.Document):
         return [p for p in class_dict if hasattr(class_dict[p], 'is_refresh') and
                 not p.startswith('_')]  # ignore self._collections
 
+    @exposed
     def properties(self):
         """
         TODO real properties docstring
@@ -202,10 +107,10 @@ class Feature(me.Document):
         Pretty-print a human-readable description of all the object's property
         methods
         """
-        print('')
         for prop in self._properties():
             messages.pprint_func(prop, self.__class__.__dict__[prop].__doc__)
 
+    @exposed
     def call_records(self, **kwargs) -> me.QuerySet:
         """Return a list of CallRecords associated with this Feature.
 
@@ -222,60 +127,68 @@ class Feature(me.Document):
         for record in self.call_records():
             print(record)
 
-    def __call__(self, initiating_call=None, **kwargs):
+    def __call__(self):
         """Feature is callable. This method does whatever is needed to update an
         expired feature. By default, calling the instance only refreshes and
         logs. Unless overwritten, just updates the time-since-refresh and
-        returns itself. This strikes me as a convenient expressionn of intent
+        returns itself. This strikes me as a convenient expression of intent
         in some ways, but it's also a little unpythonic: "explicit is better
         than implicit".
 
         """
         return
 
-    def is_stale(self, record):
-        """A pretty weird internal method
-        """
-        is_stale = False
-        # if this call recurses, recurse on ancestors.
-        for parent in self.parents.values():
-            # Call parent to refresh recursively; increment stack depth
-            is_stale |= parent.touch(initiating_call=record, is_stale=False)
-        # If stale for some other reason, also flag to be updated.
-        is_stale |= self.expired(call_record=None)
-        is_stale |= self.manual_expiration_switch
-        # If this line is in a later place, __call__ is called twice. You need
-        # to understand why.
-        self.manual_expiration_switch = False
-        return is_stale
-
-    @refresh
-    def touch(self, initiating_call=None, is_stale=False) -> bool:
-        """Manually refresh the feature without doing anything else. This method has a
-        special role, being invoked by DySART as the default refresh method
-        called as it climbs the feature tree. It's also treated in a special
-        way by @refresh, in order to propagate refresh data downstream. While
-        this does work, it's a little bit unpythonic: "explicit is better than
-        implicit". In short, this is a hack, and it shouldn't last.
-        """
-        return is_stale
-
-    def expired(self, call_record: "CallRecord" = None) -> object:
-        """Check for feature expiration.
-        """
-        expired = self.manual_expiration_switch
-        if hasattr(self, '__expiration_hook__'):
-            expired |= self.__expiration_hook__() == ExpirationStatus.EXPIRED
-        return expired
-
+    @exposed
     def set_expired(self, is_expired: bool = True) -> None:
         """Provide an interface to manually set the expiration state of a feature.
         """
         self.manual_expiration_switch = is_expired
         self.save()
+    
+    async def exec_async_dunder(self, hook: str, *args) -> Any:
+        """Executes a named hook, if one exists, whether it is synchronous or
+        async. Otherwise, do nothing.
+        
+        Args:
+            hook: The name of the hook (without dunders)
+            *args: Arguments to the hook
 
-    def update(self):
-        pass
+        Returns: Return value, if any
+
+        """
+        hook = getattr(self, f"__{hook}__", None)
+        if hook:
+            if inspect.iscoroutinefunction(hook):
+                return await hook(*args)
+            else:
+                return hook(*args)
+
+    async def exec_feature(self, record):
+        """
+
+        Args:
+            record:
+
+        Returns:
+            
+        Todo:
+            Propagate `manual_expiration_switch` to children.
+
+        """
+        record.setup()
+        try:
+            await self.exec_async_dunder('pre_hook', record)
+            # Call the feature.
+            return_value = await self.exec_async_dunder('call')
+            await self.exec_async_dunder('validation_hook', record, return_value)
+            self.manual_expiration_switch = False
+            self.save()
+            record.conclude(CallStatus.DONE)
+        except Exception as e:
+            record.conclude(CallStatus.FAILED)
+            raise e
+        await self.exec_async_dunder('post_hook', record)
+        return return_value
 
     @property
     def parents(self):
@@ -284,20 +197,60 @@ class Feature(me.Document):
         parent object, to the corresponding parent objects.
 
         """
-        return {key: self.__get_parent(key) for key in self.parent_ids}
+        return {key: self._get_parent(key) for key in self.parent_ids}
 
-    def __get_parent(self, parent_key):
+    def _get_parent(self, parent_key: str):
         """Returns the parent associated with a parent key. This is an internal
         method used by the `parents` property.
 
+        Args:
+            parent_key: The parent key to look up
+        Returns: the parent Feature in the context that is passed in.
+
+        Raises: KeyError
+
         """
-        parents = Feature.objects(id=self.parent_ids[parent_key])
-        if len(parents) == 0:
-            # TODO
-            pass
-        if len(parents) > 1:
-            raise me.errors.MultipleObjectsReturned
-        return parents[0]
+        return self.ctx[self.parent_ids[parent_key]]
+
+    async def expired_ancestors(self) -> OrderedDict:
+        """Returns a list of ancestors that are expired, in topological-sorted
+        order, deduplicated, and possibly including the callee.
+
+        Returns:
+
+        """
+        acc = OrderedDict({})
+        parent_ancestors = [await parent.expired_ancestors()
+                            for parent in self.parents.values()]
+        for ancestors in parent_ancestors:
+            acc.update(ancestors)
+
+        # If any parent is expired, or this one has been flagged, schedule this for refresh.
+        expired = (len(acc) > 0)
+        exp_hook_res = (await self.exec_async_dunder('expiration_hook'))
+        expired |= exp_hook_res == ExpirationStatus.EXPIRED
+        expired |= self.expiry_override()
+        if expired:
+            acc[self] = True
+        return acc
+    
+    def expiry_override(self) -> bool:
+        """A hard override function that may be overridden (excuse me) by
+        subclasses to provide additional incontrovertible expiry conditions,
+        such as the absence of an existing measurement result.
+
+        Returns:
+
+        """
+        return self.manual_expiration_switch
+    
+    async def is_expired(self) -> bool:
+        """
+        
+        Returns:
+
+        """
+        return len(await self.expired_ancestors()) > 0
 
     def add_parents(self, new_parents: Dict):
         """Insert dependencies into the feature's parents dictionary and
@@ -306,6 +259,12 @@ class Feature(me.Document):
         for parent_key, parent_id in new_parents.items():
             self.parent_ids[parent_key] = parent_id
         self.save()
+
+    def exposed_methods(self) -> List[callable]:
+        """Gets a list of all the methods of this class annotated with @result
+        """
+        return [getattr(self, name) for name in dir(self)
+                if isinstance(getattr(self, name, None), exposed)]
 
 
 class CallStatus(enum.Enum):
@@ -335,17 +294,19 @@ class CallRecord(me.Document):
                      'stop_time',
                      'user',
                      'hostname',
+                     'remote',
                      'exit_status',]
 
+    uuid = me.StringField(default='', max_length=UUID_LEN, required=True, primary_key=True)
     initiating_call = me.ReferenceField('self', null=True)
     stack_level = me.IntField(default=0)
     feature = me.ReferenceField(Feature, required=True)
     method = me.StringField(max_length=80)
-    uuid = me.StringField(default='', max_length=UUID_LEN, required=True, primary_key=True)
     start_time = me.DateTimeField()
     stop_time = me.DateTimeField()
     user = me.StringField(max_length=255)
     hostname = me.StringField(max_length=255)
+    remote = me.StringField(max_length=45)
     exit_status = me.StringField(max_length=16)
     info = me.StringField(default='')
 

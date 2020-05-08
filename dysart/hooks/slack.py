@@ -9,15 +9,17 @@ import aiohttp
 from slack import WebClient
 from slack.errors import SlackApiError
 
-client = WebClient(token=conf.config['SLACK_API_TOKEN'])
+client = WebClient(token=conf.config['slack_api_token'],
+                   run_async=True)
+
 
 def to_channel(channel: str):
     @post_hook
-    def hook(record: CallRecord):
+    async def hook(record: CallRecord):
         with messages.FormatContext('slack'):
             text = record_message(record)
         try:
-            response = client.chat_postMessage(
+            response = await client.chat_postMessage(
                 channel=channel,
                 text=text
             )
@@ -38,11 +40,11 @@ def to_users(*users: List[str]):
         channel_id = response["channel"]["id"]
 
         @post_hook
-        def hook(record: CallRecord):
+        async def hook(record: CallRecord):
             with messages.FormatContext('slack'):
                 text = record_message(record)
             try:
-                response = client.chat_postMessage(
+                response = await client.chat_postMessage(
                     channel=channel_id,
                     text=text
                 )
