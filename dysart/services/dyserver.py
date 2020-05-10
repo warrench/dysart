@@ -28,13 +28,15 @@ be sort of good if you're only allowed to call methods on features and have some
 value returned.
 """
 
+import functools
 from io import StringIO
 import json
 import pickle
-import socket
+import sys
 
-from dysart.feature import exposed
-from dysart.messages.messages import StatusMessage
+from dysart.feature import exposed, CallRecord
+from dysart.records import RequestRecord
+import dysart.messages.messages as messages
 from dysart.messages.errors import *
 import dysart.project as project
 import dysart.services.service as service
@@ -44,9 +46,38 @@ from dysart.services.database import Database
 import toplevel.conf as conf
 
 import aiohttp.web as web
+import mongoengine as me
 
 # TEMPORARY
 from dysart.equs_std.equs_features import *
+
+
+def process_request(coro):
+    """
+
+    Args:
+        coro: A coroutine function, notionally an HTTP request handler.
+
+    Returns:
+        A coroutine function, notionally an HTTP request handler.
+    
+    Todo:
+        Need to figure out how to unwrap the response to persist its body
+        in the RequestRecord
+
+    """
+
+    @functools.wraps(coro)
+    async def wrapped(self, request):
+        await self.authorize(request)
+        text = await request.text()
+        request = RequestRecord(
+            remote=request.remote,
+            path=request.path,
+            text=text
+        )
+        return await coro(self, request)
+    return wrapped
 
 
 class Dyserver(service.Service):
@@ -98,7 +129,7 @@ class Dyserver(service.Service):
     def db_connect(self, host_name, host_port) -> None:
         """Sets up database client for python interpreter.
         """
-        with StatusMessage('{}connecting to database...'.format(messages.TAB)):
+        with messages.StatusMessage('{}connecting to database...'.format(messages.TAB)):
             try:
                 self.db_client = me.connect(conf.config['default_db'], host=host_name, port=host_port)
                 # Do the following lines do anything? I actually don't know.
@@ -111,7 +142,7 @@ class Dyserver(service.Service):
     def labber_connect(self, host_name) -> None:
         """Sets a labber client to the default instrument server.
         """
-        with StatusMessage('{}Connecting to instrument server...'.format(messages.TAB)):
+        with messages.StatusMessage('{}Connecting to instrument server...'.format(messages.TAB)):
             try:
                 with LabberContext():
                     labber_client = Labber.connectToServer(host_name)
@@ -148,7 +179,7 @@ class Dyserver(service.Service):
         if request.remote not in conf.config['whitelist']:
             raise web.HTTPUnauthorized
     
-    async def refresh_feature(self, feature, request):
+    async def refresh_feature(self, feature, request: RequestRecord):
         """
         
         Args:
@@ -163,14 +194,11 @@ class Dyserver(service.Service):
         """
         scheduled_features = await feature.expired_ancestors()
         for scheduled_feature in scheduled_features:
-            record = CallRecord(
-                remote=request.remote,
-                feature=scheduled_feature,
-                hostname=socket.gethostname()
-            )
+            record = CallRecord(scheduled_feature, request)
             await scheduled_feature.exec_feature(record)
             
-    async def feature_get_handler(self, request):
+    @process_request
+    async def feature_get_handler(self, request: RequestRecord):
         """Handles requests that only retrieve data about Features.
         For now, it simply retrieves the values of all `refresh`
         methods attached to the Feature.
@@ -190,8 +218,7 @@ class Dyserver(service.Service):
         }
 
         """
-        await self.authorize(request)
-        data = await request.json()
+        data = request.json
         try:
             feature_id = self.project.feature_ids[data['feature']]
             feature = self.project.features[feature_id]
@@ -204,7 +231,8 @@ class Dyserver(service.Service):
         response_data['name'] = data['feature']
         return web.Response(body=json.dumps(response_data))
 
-    async def feature_post_handler(self, request):
+    @process_request
+    async def feature_post_handler(self, request: RequestRecord):
         """Handles requests that may mutate state.
         
         Args:
@@ -214,8 +242,7 @@ class Dyserver(service.Service):
         Returns:
 
         """
-        await self.authorize(request)
-        data = await request.json()
+        data = request.json
         # Rolling my own remote object protocol...
         try:
             feature_id = self.project.feature_ids[data['feature']]
@@ -240,7 +267,8 @@ class Dyserver(service.Service):
         return_value = method(*data['args'], **data['kwargs'])
         return web.Response(body=pickle.dumps(return_value))
 
-    async def project_post_handler(self, request):
+    @process_request
+    async def project_post_handler(self, request: RequestRecord):
         """Handles project management-related requests. For now,
         this just loads/reloads the sole project in server memory.
 
@@ -251,8 +279,7 @@ class Dyserver(service.Service):
         Returns:
 
         """
-        await self.authorize(request)
-        data = await request.json()
+        data = request.json
         
         def exposed_method_names(feature_id: str):
             return [m.__name__ for m in
@@ -277,7 +304,8 @@ class Dyserver(service.Service):
             )
         return response
 
-    async def debug_handler(self, request):
+    @process_request
+    async def debug_handler(self, request: RequestRecord):
         """A handler invoked by a client-side request to transfer control
         of the server process to a debugger. This feature should be disabled
         without admin authentication
@@ -290,6 +318,7 @@ class Dyserver(service.Service):
         """
         print('Running debug handler!')
         breakpoint()
+        pass  # A reminder that nothing is supposed to happen
         return web.Response()
     
     def setup_routes(self):
@@ -298,11 +327,6 @@ class Dyserver(service.Service):
         self.app.router.add_post('/project', self.project_post_handler)
         self.app.router.add_post('/debug', self.debug_handler)
 
-
-class Request(me.Document):
-    # TODO
-    pass
-        
 
 class LabberContext:
     """A context manager to wrap connections to Labber and capture errors

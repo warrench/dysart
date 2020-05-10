@@ -24,7 +24,7 @@ from Labber import ScriptTools as st
 from dysart.labber.labber_serialize import load_labber_scenario_as_dict
 from dysart.labber.labber_serialize import save_labber_scenario_from_dict
 import dysart.labber.labber_util as labber_util
-from dysart.feature import Feature, CallRecord, exposed
+from dysart.feature import Feature, exposed
 from dysart.messages.errors import UnsupportedPlatformError
 import toplevel.conf as conf
 
@@ -431,16 +431,3 @@ class LabberFeature(Feature):
     @labber_output_file.setter
     def labber_output_file(self, x):
         self.config.sCfgFileOut = x
-
-
-class LabberCall(CallRecord):
-    """
-    TODO: docstring
-    """
-
-    # should get the max name length on the labber output directory from server
-    log_name = me.StringField(max_length=MAX_PATH)
-
-    def __init__(self, feature, *args, **kwargs):
-        super().__init__(feature, *args, **kwargs)
-        self.log_name = feature.next_log_name()

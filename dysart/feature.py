@@ -22,6 +22,7 @@ from typing import *
 import mongoengine as me
 
 import dysart.messages.messages as messages
+from dysart.records import RequestRecord
 
 
 class ExpirationStatus(enum.Enum):
@@ -277,10 +278,13 @@ class CallStatus(enum.Enum):
 
 class CallRecord(me.Document):
     """
-    TODO CallRecord docstring
-
     Uniquely identified (with high probability) by a 40-character hexadecimal
     string.
+    
+    Todo:
+        I can't see how to put this into another source file (say, records.py)
+        without having a circular import, but that seems like a desirable thing
+        to do.
     """
 
     meta = {'allow_inheritance': True}
@@ -289,33 +293,32 @@ class CallRecord(me.Document):
 
     # Which attributes are included in self.__str__()?
     printed_attrs = ['feature',
-                     'method',
                      'start_time',
                      'stop_time',
-                     'user',
                      'hostname',
-                     'remote',
+                     'request',
                      'exit_status',]
 
     uuid = me.StringField(default='', max_length=UUID_LEN, required=True, primary_key=True)
-    initiating_call = me.ReferenceField('self', null=True)
-    stack_level = me.IntField(default=0)
     feature = me.ReferenceField(Feature, required=True)
-    method = me.StringField(max_length=80)
+    request = me.ReferenceField(RequestRecord, required=False)
+    template = me.StringField(default='', required=False)
+    template_diffs = me.DictField(default={}, required=False)
     start_time = me.DateTimeField()
     stop_time = me.DateTimeField()
-    user = me.StringField(max_length=255)
-    hostname = me.StringField(max_length=255)
-    remote = me.StringField(max_length=45)
     exit_status = me.StringField(max_length=16)
     info = me.StringField(default='')
 
-    def __init__(self, *args, **kwargs):
-        """To create a CallRecord, should receive `feature` and `initiating_call`
-        args
-        """
-        super().__init__(*args, **kwargs)
-        
+    def __init__(self, feature: Feature, request):
+        super().__init__()
+        self.feature = feature
+        if hasattr(feature, 'template_path'):
+            self.template = feature.template_path
+        if hasattr(feature, 'template_diffs'):
+            self.template_diffs = feature.template_diffs
+        self.request = request
+        self.save()
+
     def __setattr__(self, key, value):
         """The `exit_status` field should be a string, so handle this
         case in a special way: accept only CallStatus enums, but
@@ -328,7 +331,7 @@ class CallRecord(me.Document):
     def setup(self):
         """ This is run to setup the call record before the actual call is
         issued.
-        
+
         Note that the contents of this method *cannot* go into init, as this
         causes a slightly subtle but disastrous bug that leads to exponential
         blowup in the number of CallRecords, as each time a record is accessed
@@ -337,7 +340,7 @@ class CallRecord(me.Document):
         self.start_time = dt.datetime.now()
         self.__gen_uuid()
         self.save()
-    
+
     def conclude(self, status: CallStatus):
         """ ...and this one tears it down
         """
@@ -355,34 +358,21 @@ class CallRecord(me.Document):
             s += ' ' + messages.cstr(attr, 'italic') + ' ' * (max_attr_len - len(attr))\
                      + ' : {}\n'.format(val)
         return s
-    
+
     def __gen_uuid(self):
         """Creates a unique ID for the call record and assigned.
-        
+
         Must be called after assigning a start time.
-        
+
         Note that I am not using a hash function instead of the `uuid` module
         from the standard library because we specifically want a pseudorandom
         string with non-predictable values even in the most significant digits
         """
         h = hashlib.sha1(self.feature.id.encode('utf-8'))
         h.update(str(self.start_time).encode('utf-8'))
-        if self.initiating_call:
-            h.update(self.initiating_call.uuid.encode('utf-8'))
+        if self.request:
+            h.update(self.request.uuid.encode('utf-8'))
         self.uuid = h.hexdigest()[:CallRecord.UUID_LEN]
-
-    def get_initiated_call(self, other_feature):
-        # Should search tree for a matching call.
-        return None
-
-    def root_call(self) -> 'CallRecord':
-        """Get the ultimate root of the call tree--this should be input from a user,
-        cron daemon or similar.
-        """
-        if self.initiating_call == None:
-            return self
-        else:
-            return self.initiating_call.root_call()
 
 
 def get_records_by_uid_pre(uid_pre):

@@ -38,4 +38,4 @@ def post_hook(fn: Callable) -> Callable:
 
 @pre_hook
 def debug(record):
-    print(f"DEBUG PRE-HOOK: calling {record.method}")
+    print(f"DEBUG PRE-HOOK: executing feature {record.feature.id}")
