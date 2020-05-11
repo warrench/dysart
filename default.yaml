@@ -2,11 +2,11 @@
 # It is generally accessed through the `config` variable in the `toplevel.conf`
 # module. You should edit this file to suit your deployment.
 
-# The port bound by the Dysart server.
-server_port: 8000
-
 # The address of the dysart server
-server_hostname: '127.0.0.1'
+server_host: '127.0.0.1'
+
+# The port bound by the Dysart server.
+server_port: 31415
 
 # The machine the mongodb database runs on
 db_host: localhost
@@ -14,19 +14,21 @@ db_host: localhost
 # The port that the mongodb database listens on
 db_port: 55455
 
+# Name of the mongodb database to use.
+default_db: debug_data
+
+# The machine running the Labber instance
 labber_host: localhost
 
 # Authorized remote hosts
-whitelist: ['127.0.0.1']
-
-# Name of the mongodb database to use.
-default_db: debug_data
+whitelist: ['127.0.0.1', '::1']
 
 logfile_name: .dysart.log
 
 # Path to the root of the project
 dys_path: ~/equs/QMIT/dysart
 
+# Where logfiles go
 labber_data_dir: ~/equs/QMIT/dysart/debug_data/labber
 
 # These are the projects known to the server. I'm not sure about keeping this

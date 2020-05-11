@@ -1,5 +1,4 @@
 import os
-import sys
 import datetime
 import platform
 import re
@@ -46,7 +45,7 @@ class Database(Service):
         """Optionally returns a port number of a running process; none if not running.
         """
         # TODO really do clean up this fragile method. Abstract away some of the repetition
-        # betwen platforms; if possible remove the dependency on `netstat`, etc.
+        # between platforms; if possible remove the dependency on `netstat`, etc.
         system = platform.system()
         if system in 'Linux, Darwin':
             p = psutil.Process(self.pid)
@@ -104,12 +103,9 @@ class Database(Service):
 
     def _stop(self) -> None:
         if platform.system() in ('Darwin', 'Linux'):
-            try:
-                os.kill(self.pi, signal.SIGINT)
-            except Exception:
-                pass
+            os.kill(self.pid, signal.SIGINT)
         elif platform.system() == 'Windows':
-            pass
+            raise NotImplementedError
 
     @property
     def db_dir(self) -> str:

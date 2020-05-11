@@ -40,8 +40,6 @@ import dysart.messages.messages as messages
 from dysart.messages.errors import *
 import dysart.project as project
 import dysart.services.service as service
-from dysart.services.jobscheduler import Job, JobScheduler
-from dysart.services.streams import DysDataStream
 from dysart.services.database import Database
 import toplevel.conf as conf
 
@@ -53,7 +51,8 @@ from dysart.equs_std.equs_features import *
 
 
 def process_request(coro):
-    """
+    """Wraps a session handler coroutine to perform authentication; also
+    injects internal request type.
 
     Args:
         coro: A coroutine function, notionally an HTTP request handler.
@@ -66,7 +65,6 @@ def process_request(coro):
         in the RequestRecord
 
     """
-
     @functools.wraps(coro)
     async def wrapped(self, request):
         await self.authorize(request)
@@ -82,30 +80,22 @@ def process_request(coro):
 
 class Dyserver(service.Service):
 
-    def __init__(self,
-                 hostname=None,
-                 port=None,
-                 db_host=None,
-                 db_port=None,
-                 labber_host=None):
+    def __init__(self, start_db=False):
         """Start and connect to standard services
         """
-        self.db_server = Database('database')
-        self.db_server.start()
-        self.db_port = db_port if db_port else self.db_server.port
-
-        self.hostname = hostname if hostname else conf.config['server_hostname']
-        self.port = port if port else int(conf.config['server_port'])
-        self.db_host = db_host if db_host else conf.config['db_host']
-        self.labber_host = labber_host if labber_host else conf.config['labber_host']
-        self.job_scheduler = JobScheduler()
+        self.host = conf.config['server_host']
+        self.port = int(conf.config['server_port'])
+        self.db_host = conf.config['db_host']
+        self.db_port = conf.config['db_port']
+        self.labber_host = conf.config['labber_host']
         self.logfile = os.path.join(
             conf.dys_path,
             conf.config['logfile_name']
         )
-        self.stdmsg = DysDataStream()
-        self.stdimg = DysDataStream()
-        self.stdfit = DysDataStream()
+
+        if start_db or 'start_db' in conf.config['options']:
+            self.db_server = Database('database')
+            self.db_server.start()
 
         self.app = web.Application()
         self.setup_routes()
@@ -118,13 +108,14 @@ class Dyserver(service.Service):
         """Connects to services and runs the server continuously"""
         self.db_connect(self.db_host, self.db_port)
         self.labber_connect(self.labber_host)
-        self.job_scheduler.start('{}Starting job scheduler...'.format(messages.TAB))
-        web.run_app(self.app, host=self.hostname, port=self.port)
+        web.run_app(self.app, host=self.host, port=self.port)
+        if hasattr(self, 'db_server'):
+            self.db_server.stop()
 
     def _stop(self) -> None:
         """Ends the server process"""
-        self.job_scheduler.stop()
-        self.db_server.stop()
+        if hasattr(self, 'db_server'):
+            self.db_server.stop()
 
     def db_connect(self, host_name, host_port) -> None:
         """Sets up database client for python interpreter.
