@@ -4,7 +4,7 @@ import platform
 import re
 import signal
 import subprocess
-from typing import Optional
+from typing import *
 from functools import lru_cache
 
 import toplevel.conf as conf
@@ -13,11 +13,40 @@ from dysart.messages.errors import *
 
 import psutil
 
+def db_process() -> Optional[psutil.Process]:
+    """Tries to find a process running a mongodb server, locally This
+    implementation is probably unnecessarily slow. Could be slightly
+    more sophisticated to improve performance, if that matters.
+
+
+    Returns: a mongodb database process
+
+    """
+    processes = psutil.process_iter()
+    for process in processes:
+        if 'mongod' in process.name():  # TODO
+            return process
+    return None
+
+
+def db_discover() -> Tuple[str, int]:
+    """Tries to find a (hostname, port) pair for the database server. For now,
+    and possibly indefinitely, only look on this machine.
+
+    Returns: A (hostname, port) pair where a mongodb server can be found.
+
+    """
+    host = 'localhost'
+    process = db_process()
+    port = process.connections()[0].laddr.port
+    return host, port
+
+
 class Database(Service):
     """This Service class should be used to run the MongoDB database server
     backing DySART."""
 
-    def __init__(self, port=None):
+    def __init__(self):
         self.proc_output = None  # what does this do?
         # ensure that necessary database directories exist
         for dir in (os.path.split(self.log_path)[0], self.db_dir):
@@ -27,18 +56,6 @@ class Database(Service):
     def is_running(self) -> bool:
         """Returns whether a mongod process is running"""
         return self.__process is not None
-
-    @property
-    def __process(self):
-        """Optionally returns a psutil process. This implementation is probably
-        unnecessarily slow. Could be slightly more sophisticated to improve
-        performance, if that matters.
-        """
-        processes = psutil.process_iter()
-        for process in processes:
-            if 'mongod' in process.name():  # TODO
-                return process
-        return None
 
     @property
     def port(self) -> Optional[int]:
@@ -79,7 +96,7 @@ class Database(Service):
     def pid(self) -> Optional[int]:
         """Returns the process id of the running mongod instance, if there is
         one. This """
-        process = self.__process
+        process = db_process()
         if process is not None:
             return process.pid
         else:

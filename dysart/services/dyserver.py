@@ -17,6 +17,7 @@ import functools
 import hashlib
 from io import StringIO
 import json
+import os
 import pickle
 import sys
 
@@ -26,14 +27,11 @@ import dysart.messages.messages as messages
 from dysart.messages.errors import *
 import dysart.project as project
 import dysart.services.service as service
-from dysart.services.database import Database
+import dysart.services.database as database
 import toplevel.conf as conf
 
 import aiohttp.web as web
 import mongoengine as me
-
-# TEMPORARY
-from dysart.equs_std.equs_features import *
 
 
 def process_request(coro):
@@ -66,22 +64,30 @@ def process_request(coro):
 
 class Dyserver(service.Service):
 
-    def __init__(self, start_db=False):
+    def __init__(self, db_start=False, db_discover=False):
         """Start and connect to standard services
         """
         self.host = conf.config['server_host']
         self.port = int(conf.config['server_port'])
-        self.db_host = conf.config['db_host']
-        self.db_port = conf.config['db_port']
         self.labber_host = conf.config['labber_host']
         self.logfile = os.path.join(
             conf.dys_path,
             conf.config['logfile_name']
         )
 
-        if start_db or 'start_db' in conf.config['options']:
-            self.db_server = Database('database')
+        # start_db option: run the database server as a subprocess
+        # on startup!
+        if db_start or 'db_start' in conf.config['options']:
+            self.db_server = database.Database('database')
             self.db_server.start()
+
+        # discover_db option: if database server is alredy running,
+        # find out what port it's listening on!
+        if db_discover or 'db_discover' in conf.config['options']:
+            self.db_host, self.db_port = database.db_discover()
+        else:
+            self.db_host = conf.config['db_host']
+            self.db_port = conf.config['db_port']
 
         self.app = web.Application()
         self.setup_routes()
@@ -103,12 +109,12 @@ class Dyserver(service.Service):
         if hasattr(self, 'db_server'):
             self.db_server.stop()
 
-    def db_connect(self, host_name, host_port) -> None:
+    def db_connect(self, host=None, port=None) -> None:
         """Sets up database client for python interpreter.
         """
         with messages.StatusMessage('{}connecting to database...'.format(messages.TAB)):
             try:
-                self.db_client = me.connect(conf.config['default_db'], host=host_name, port=host_port)
+                self.db_client = me.connect(conf.config['default_db'], host=host, port=port)
                 # Do the following lines do anything? I actually don't know.
                 sys.path.pop(0)
                 sys.path.insert(0, os.getcwd())
