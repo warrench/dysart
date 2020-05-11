@@ -5,30 +5,16 @@ Author: mcncm 2019
 
 DySART job server
 
-currently using http library; this should not be used in production, as it's
-not really a secure solution with sensible defaults. Should migrate to Apache
-or Nginx as soon as I understand what I really want.
-
-Why am I doing this?
-* Allows multiple clients to request jobs
-* Allows new _kinds_ of clients, like "cron" services and web clients (which
-  Simon is now asking about)
-* Keeps coupling weakish between user and database; probably a good strategy.
-
 TODO
 * loggin'
 * login
 * when the scheduler is shut down, it should die gracefully: preferably dump its
   job queue to a backup file on the database, and recover from this on startup.
-
-Still-open question: how is the request formulated? I imagine that it's basically
-python code that the server evaluates. But this is literally the most insecure
-thing you can do. So, it needs to be a very restricted subset. Ideally, it would
-be sort of good if you're only allowed to call methods on features and have some
-value returned.
 """
 
+import base64
 import functools
+import hashlib
 from io import StringIO
 import json
 import pickle
@@ -145,17 +131,18 @@ class Dyserver(service.Service):
             finally:
                 self.labber_client = labber_client
 
-    def job_scheduler_connect(self) -> None:
-        self.job_scheduler = jobscheduler.JobScheduler()
-        self.job_scheduler.start()
-
     def load_project(self, project_path: str):
         """Loads a project into memory, erasing a previous project if it
         existed.
         """
         self.project = project.Project(project_path)
-    
-    async def authorize(self, request):
+
+    @staticmethod
+    def hashpass(token: str) -> str:
+        h = hashlib.sha1(token.encode('utf-8'))
+        return h.hexdigest()
+
+    async def authorize(self, request: web.Request):
         """Auth for an incoming HTTP request. In the future this will probably
         do some more elaborate three-way handshake; for now, it simply checks
         the incoming IP address against a whitelist.
@@ -167,7 +154,13 @@ class Dyserver(service.Service):
             web.HTTPUnauthorized
 
         """
-        if request.remote not in conf.config['whitelist']:
+        try:
+            authorization = request.headers['authorization']
+        except KeyError:
+            raise web.HTTPForbidden
+        atype, credentials = authorization.split()
+        user, token = base64.b64decode(credentials).decode('utf-8').split(':')
+        if Dyserver.hashpass(token) not in conf.config['tokens']:
             raise web.HTTPUnauthorized
     
     async def refresh_feature(self, feature, request: RequestRecord):

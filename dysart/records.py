@@ -32,7 +32,8 @@ class RequestRecord(me.Document):
         self.__gen_uuid()
         self.save()
 
-    @functools.cached_property
+    @property
+    @functools.lru_cache(1)
     def json(self):
         return json.loads(self.text)
 

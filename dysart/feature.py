@@ -51,6 +51,7 @@ class exposed:
     def __call__(self, *args, **kwargs):
         return self.fn(self.obj, *args, **kwargs)
 
+
 def refresh(fn):
     """Decorator that flags a method as having dependencies and possibly requiring
     a refresh operation. Refresh methods are always exposed.

@@ -5,8 +5,11 @@ This module provides a native Python client library for Dysart using a
 remote-object protocol to access Feature methods.
 """
 
+import binascii
+import hashlib
 import json
 import numbers
+import os
 import pickle
 import random
 from typing import *
@@ -17,10 +20,13 @@ import graphviz
 # This intentionally-global variable controls how much stuff is printed
 verbose = True
 
-
 class Client:
     """
     """
+
+    # Todo: This is pretty nonstandard for Windows--what's normal there?
+    conf_file = os.path.join(os.path.expanduser('~'), '.config',
+                                    'dysart', 'client.json')
 
     cheerful_messages = [
         "Happy measuring!",
@@ -34,14 +40,28 @@ class Client:
         self.port = port
         self.url = f"http://{hostname}:{port}"
         self.verbose = verbose
+        try:
+            self.__load_token()
+        except (FileNotFoundError, KeyError):
+            self.gen_token()
+            self.__load_token()
 
-    def project(self, name: str, token: Optional[str] = None):
+    def project(self, name: str, token: Optional[str] = None) -> "RemoteProject":
+        """Loads a project on the server and generates a remote handle to that
+        project.
+        
+        Args:
+            name: The name of the project on the server
+            token: An auth token. If passed `None`, uses default token.
 
+        Returns: A handle to the loaded project.
+
+        """
         url = self.url + '/project'
         data = {
             'project': name,
         }
-        response = requests.post(url, json=data)
+        response = requests.post(url, json=data, auth=self._auth())
         response.raise_for_status()
         response_data = json.loads(response.content)
         proj = RemoteProject(self, name, token=token)
@@ -55,7 +75,53 @@ class Client:
             print(f"Loaded project `{name}`.", random.choice(self.cheerful_messages))
             display_graph(response_data['graph'])
         return proj
-    
+
+    def gen_token(self) -> None:
+        """Generates a token string.
+
+        Returns: A 32-byte token, as a hex string.
+
+        """
+        token = binascii.hexlify(os.urandom(32)).decode()
+        os.makedirs(os.path.dirname(self.conf_file), exist_ok=True)
+        try:
+            with open(self.conf_file, 'r') as f:
+                conf = json.loads(f.read())
+        except FileNotFoundError:
+            conf = {}
+        conf['token'] = token
+        with open(self.conf_file, 'w') as f:
+            json.dump(conf, f)
+        print("Your token hash is:", self.token_hash,
+              "Please put it in the `tokens` field of your Dysart server's config file!",
+              sep='\n')
+
+
+    @property
+    def token_hash(self) -> str:
+        """Returns a token hash that can be placed on the Dysart server to
+        recognize this client. By contrast, self._token is the preimage
+        itself.
+
+        Returns: a cryptographic hash of this client's authentication token.
+
+        """
+        return hashlib.sha1(self._token.encode('utf-8')).hexdigest()
+
+    def __load_token(self) -> None:
+        with open(self.conf_file, 'r') as f:
+            conf = json.loads(f.read())
+            self._token = conf['token']
+            
+    def _auth(self) -> Tuple[str, str]:
+        """Generates an `auth` argument for requests.
+
+        Returns:
+
+        """
+        user = ''
+        return (user, self._token)
+
     def debug(self):
         """Suspends execution of the server process and transfers control
         to a debugger. Invocation of this request should be forbidden by
@@ -66,7 +132,7 @@ class Client:
         """
         if verbose:
             print("Attempting to suspend execution... ")
-        response = requests.post(self.url + '/debug')
+        response = requests.post(self.url + '/debug', auth=self._auth())
         response.raise_for_status()
         if verbose:
             print("Resumed.")
@@ -104,7 +170,8 @@ class RemoteFeature:
             'project': self.project.name,
             'feature': self.name,
         }        
-        response = requests.get(self.url, json=data)
+        response = requests.get(self.url, json=data,
+                                auth=self.project.client._auth())
         response.raise_for_status()
         return feature_html_table(json.loads(response.content))
 
@@ -126,7 +193,8 @@ class RemoteProcedureCall:
         }
         if verbose:
             print("Issuing request... ")
-        response = requests.post(self.feature.url, json=data)
+        response = requests.post(self.feature.url, json=data,
+                                 auth=self.feature.project.client._auth())
         return RemoteProcedureCall.interp_response(response)
 
     @staticmethod
@@ -177,13 +245,6 @@ def display_graph(edges: List[Tuple[str, str]]):
     except NameError:
         # You aren't in a Jupyter notebook, I guess
         pass
-
-class Shout(object):
-    def __init__(self, text):
-        self.text = text
-
-    def _repr_html_(self):
-        return "<h1>" + self.text + "</h1>"
 
 if __name__ == '__main__':
     proj = RemoteProject(name='equs_demo',
