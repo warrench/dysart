@@ -296,9 +296,8 @@ class CallRecord(me.Document):
     printed_attrs = ['feature',
                      'start_time',
                      'stop_time',
-                     'hostname',
-                     'request',
-                     'exit_status',]
+                     'exit_status',
+                     'info',]
 
     uuid = me.StringField(default='', max_length=UUID_LEN, required=True, primary_key=True)
     feature = me.ReferenceField(Feature, required=True)
@@ -351,8 +350,10 @@ class CallRecord(me.Document):
 
     def __str__(self):
         s = self.uuid[:16] + '...\n'
-        for attr in CallRecord.printed_attrs:
-            max_attr_len = max(map(len, CallRecord.printed_attrs))
+        printed_attrs = [attr for attr in CallRecord.printed_attrs
+                         if hasattr(self, attr)]
+        max_attr_len = max(map(len, printed_attrs))
+        for attr in printed_attrs:
             val = getattr(self, attr)
             if isinstance(val, Feature):
                 val = val.id

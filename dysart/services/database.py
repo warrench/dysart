@@ -70,7 +70,7 @@ class Database(Service):
                 # Is the first nonzero port the right thing to return here?
                 return next(port for port in ports if port != 0)
             except Exception as e:
-                # TODO bad: pookemon exception handling
+                # TODO bad: pokemon exception handling
                 return None
 
     # I'd rather use cached_property, but a lot of the lab is still on 3.7.

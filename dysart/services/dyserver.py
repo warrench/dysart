@@ -23,7 +23,7 @@ import sys
 from dysart.feature import exposed, CallRecord
 from dysart.records import RequestRecord
 import dysart.messages.messages as messages
-from dysart.messages.errors import *
+import dysart.messages.errors as errors
 import dysart.project as project
 import dysart.services.service as service
 from dysart.services.database import Database
@@ -177,9 +177,12 @@ class Dyserver(service.Service):
             keep multiple refreshes in flight at once.
         """
         scheduled_features = await feature.expired_ancestors()
-        for scheduled_feature in scheduled_features:
-            record = CallRecord(scheduled_feature, request)
-            await scheduled_feature.exec_feature(record)
+        try:
+            for scheduled_feature in scheduled_features:
+                record = CallRecord(scheduled_feature, request)
+                await scheduled_feature.exec_feature(record)
+        except errors.InstrumentNotFoundError as e:
+            raise web.HTTPNotImplemented(reason=f"Instrument not found: {e}")
             
     @process_request
     async def feature_get_handler(self, request: RequestRecord):

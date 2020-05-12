@@ -13,6 +13,10 @@ class ModuleNotFoundError(DysartError):
     pass
 
 
+class InstrumentNotFoundError(DysartError):
+    pass
+
+
 class ServiceError(DysartError):
     pass
 

@@ -25,7 +25,7 @@ from dysart.labber.labber_serialize import load_labber_scenario_as_dict
 from dysart.labber.labber_serialize import save_labber_scenario_from_dict
 import dysart.labber.labber_util as labber_util
 from dysart.feature import Feature, exposed
-from dysart.messages.errors import UnsupportedPlatformError
+import dysart.messages.errors as errors
 import toplevel.conf as conf
 
 # Set path to executable. This should be done not-here, but it needs to be put
@@ -41,7 +41,7 @@ elif platform.system() == 'Windows':
     st.setExePath(os.path.join('C:\\', 'Program Files', 'Labber', 'Program'))
     MAX_PATH = 260  # This magic constant is a piece of Windows lore.
 else:
-    raise UnsupportedPlatformError
+    raise errors.UnsupportedPlatformError
 
 # This mutex is used to synchronize calls to the Labber API
 LOCK = asyncio.Lock()
@@ -322,6 +322,7 @@ class LabberFeature(Feature):
         self.template = load_labber_scenario_as_dict(self.template_file_path,
                             decode_complex=False)
 
+
     @exposed
     def set_value(self, label, value):
         """Simply wrap the Labber API
@@ -353,33 +354,51 @@ class LabberFeature(Feature):
         """
         new_config = copy.deepcopy(self.template)
         diffs = {**self.template_diffs, **self.__params__()}
-        for diff_key in diffs:
-            vals = diffs[diff_key]
-            channels = [c for c in new_config['step_channels'] if
-                       c['channel_name'] == diff_key]
-            if not channels:
-                channel = labber_util.new_channel()
-                channel['channel_name'] = diff_key
-                new_config['step_channels'].append(channel)
-            else:
-                channel = channels[0]
-            items = channel['step_items'][0]
-
+        for diff_key, diff_val in diffs.items():
             # Resolve a 3-tuple as (start, stop, n_pts).
             # For now, let's *only* handle linear interpolation
-            if isinstance(vals, tuple):
+            if isinstance(diff_val, tuple):
                 # It's wrapped in a list: if our assumption that it's length 1
                 # is wrong, let us know. We'll pull in Antti's code to do this
                 # correctly.
-                items['start'] = vals[0]
-                items['stop'] = vals[1]
-                items['n_pts'] = vals[2]
-                items['center'] = (vals[0] + vals[1]) / 2
-                items['span'] = vals[1] - vals[0]
+                channels = [c for c in new_config['step_channels'] if
+                            c['channel_name'] == diff_key]
+                if not channels:
+                    channel = labber_util.new_channel()
+                    channel['channel_name'] = diff_key
+                    new_config['step_channels'].append(channel)
+                else:
+                    channel = channels[0]
+                items = channel['step_items'][0]
+
+                items['start'] = diff_val[0]
+                items['stop'] = diff_val[1]
+                items['n_pts'] = diff_val[2]
+                items['center'] = (diff_val[0] + diff_val[1]) / 2
+                items['span'] = diff_val[1] - diff_val[0]
                 items['step'] = items['span'] / items['n_pts']
-            elif isinstance(vals, (int, float, complex)):
-                items['range_type'] = 'Single'
-                items['single'] = vals
+            elif isinstance(diff_val, (int, float)):
+                # Don't use a step channel--override a 'value' instead.
+
+                # Break e.g. "Holzworth - TWPA pump - Frequency" into
+                # "Holzworth", "TWPA pump - Frequency"
+                inst_name, chan_name = [s.strip() for s in diff_key.split(' - ', maxsplit=1)]
+                
+                # The channel name may be an alias; resolve the name.
+                inst_chans = [chan for chan in new_config['channels']
+                              if chan['instrument'] == inst_name]
+                chan_name = next((chan['quantity'] for chan in inst_chans
+                                 if chan.get('name') == chan_name),
+                                 chan_name)
+
+                # Get the instrument to modify one of its values.
+                try:
+                    inst = next(inst for inst in new_config['instruments']
+                                if inst['com_config']['name'] == inst_name)
+                except StopIteration as e:
+                    raise errors.InstrumentNotFoundError(inst_name)
+
+                inst['values'][chan_name] = diff_val
         return new_config
 
     def emit_labber_input_file(self) -> str:
@@ -400,12 +419,12 @@ class LabberFeature(Feature):
                           else 'C:\\Windows\\Temp'
         temp = tempfile.NamedTemporaryFile(delete=False,
             mode='w+b', dir=temp_dir, suffix='.labber')
-        fp = temp.name
+        fn = temp.name
         temp.close()
 
         # Merge the template and diffs; write to the tempfile
-        save_labber_scenario_from_dict(fp, self.merge_configs())
-        return fp
+        save_labber_scenario_from_dict(fn, self.merge_configs())
+        return fn
 
     @exposed
     def diffs(self):

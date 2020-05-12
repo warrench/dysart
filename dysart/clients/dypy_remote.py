@@ -192,10 +192,17 @@ class RemoteProcedureCall:
             'kwargs': kwargs
         }
         if verbose:
-            print("Issuing request... ")
-        response = requests.post(self.feature.url, json=data,
-                                 auth=self.feature.project.client._auth())
-        return RemoteProcedureCall.interp_response(response)
+            print("Issuing request... ", end='')
+        try:
+            response = requests.post(self.feature.url, json=data,
+                                     auth=self.feature.project.client._auth())
+            value = RemoteProcedureCall.interp_response(response)
+            if verbose:
+                print('done.')
+            return value
+        except Exception as e:
+            if verbose:
+                print('failed.\n', e.args[0])
 
     @staticmethod
     def interp_response(response):
