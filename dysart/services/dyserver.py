@@ -78,7 +78,7 @@ class Dyserver(service.Service):
         # start_db option: run the database server as a subprocess
         # on startup!
         if db_start or 'db_start' in conf.config['options']:
-            self.db_server = database.Database('database')
+            self.db_server = database.Database()
             self.db_server.start()
 
         # discover_db option: if database server is alredy running,

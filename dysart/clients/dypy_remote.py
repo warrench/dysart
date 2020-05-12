@@ -224,7 +224,7 @@ def feature_html_table(repr: dict) -> str:
     html = []
     add = html.append
     
-    def result_row(name: str, val: Any):
+    def table_row(name: str, val: Any):
         if isinstance(val, numbers.Number):
             val_fmt = '{:.5e}'
         else:
@@ -233,10 +233,18 @@ def feature_html_table(repr: dict) -> str:
     
     add(f"<h2>Feature <code>{repr['name']}</code></h2>")
     add(f"<h3>Id: <code>{repr['id']}</code></h3>")
-    add("<table>")
-    for name, val in repr['results'].items():
-        result_row(name, val)
-    add("</table>")
+    if 'results' in repr:
+        add(f"<h3>Results</h3>")
+        add("<table>")
+        for name, val in repr['results'].items():
+            table_row(name, val)
+        add("</table>")
+    if 'diffs' in repr:
+        add(f"<h3>Diffs</h3>")
+        add("<table>")
+        for name, val in repr['diffs'].items():
+            table_row(name, val)
+        add("</table>")
     return ''.join(html)
 
 
