@@ -55,7 +55,7 @@ class Database(Service):
 
     def is_running(self) -> bool:
         """Returns whether a mongod process is running"""
-        return self.__process is not None
+        return self.pid is not None
 
     @property
     def port(self) -> Optional[int]:

@@ -287,6 +287,7 @@ class LabberFeature(Feature):
             if not isinstance(val, numbers.Number):
                 results[key] = 'Non-numeric result'
         table['results'] = results
+        table['diffs'] = self.template_diffs
         return table
 
     def all_results(self, index=-1) -> dict:
@@ -322,7 +323,6 @@ class LabberFeature(Feature):
         self.template = load_labber_scenario_as_dict(self.template_file_path,
                             decode_complex=False)
 
-
     @exposed
     def set_value(self, label, value):
         """Simply wrap the Labber API
@@ -348,6 +348,28 @@ class LabberFeature(Feature):
         self.manual_expiration_switch = True
         self.save()
 
+    @exposed
+    def unset_value(self, label: str) -> None:
+        """Remove a label from the diffs
+
+        Args:
+            label: The label of a value to set
+
+        Returns:
+
+        """
+        del self.template_diffs[label]
+        self.manual_expiration_switch = True
+        self.save()
+
+    @exposed
+    def unset_diffs(self) -> None:
+        """Drop all diffs currently set.
+        """
+        self.template_diffs = {}
+        self.manual_expiration_switch = True
+        self.save()
+
     def merge_configs(self):
         """Merge the template and diff configuration dictionaries, in preparation
         for serialization
@@ -358,47 +380,9 @@ class LabberFeature(Feature):
             # Resolve a 3-tuple as (start, stop, n_pts).
             # For now, let's *only* handle linear interpolation
             if isinstance(diff_val, tuple):
-                # It's wrapped in a list: if our assumption that it's length 1
-                # is wrong, let us know. We'll pull in Antti's code to do this
-                # correctly.
-                channels = [c for c in new_config['step_channels'] if
-                            c['channel_name'] == diff_key]
-                if not channels:
-                    channel = labber_util.new_channel()
-                    channel['channel_name'] = diff_key
-                    new_config['step_channels'].append(channel)
-                else:
-                    channel = channels[0]
-                items = channel['step_items'][0]
-
-                items['start'] = diff_val[0]
-                items['stop'] = diff_val[1]
-                items['n_pts'] = diff_val[2]
-                items['center'] = (diff_val[0] + diff_val[1]) / 2
-                items['span'] = diff_val[1] - diff_val[0]
-                items['step'] = items['span'] / items['n_pts']
+                labber_util.merge_tuple(new_config, diff_key, diff_val)
             elif isinstance(diff_val, (int, float)):
-                # Don't use a step channel--override a 'value' instead.
-
-                # Break e.g. "Holzworth - TWPA pump - Frequency" into
-                # "Holzworth", "TWPA pump - Frequency"
-                inst_name, chan_name = [s.strip() for s in diff_key.split(' - ', maxsplit=1)]
-                
-                # The channel name may be an alias; resolve the name.
-                inst_chans = [chan for chan in new_config['channels']
-                              if chan['instrument'] == inst_name]
-                chan_name = next((chan['quantity'] for chan in inst_chans
-                                 if chan.get('name') == chan_name),
-                                 chan_name)
-
-                # Get the instrument to modify one of its values.
-                try:
-                    inst = next(inst for inst in new_config['instruments']
-                                if inst['com_config']['name'] == inst_name)
-                except StopIteration as e:
-                    raise errors.InstrumentNotFoundError(inst_name)
-
-                inst['values'][chan_name] = diff_val
+                labber_util.merge_scalar(new_config, diff_key, diff_val)
         return new_config
 
     def emit_labber_input_file(self) -> str:
