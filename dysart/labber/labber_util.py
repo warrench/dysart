@@ -171,7 +171,7 @@ def merge_scalar(new_config: Dict, diff_key: str, diff_val: Union[int, float]) -
     # If possible, set a step channel _first_, since this is the order of
     # precedence used by Labber.
     # In the step channel case, the key should be of the form
-    # 'Instrument - C
+    # 'Instrument - channel'
     try:
         chan = get_step_channel(new_config, diff_key)
         # Since we're overriding this parameter, clear any relation

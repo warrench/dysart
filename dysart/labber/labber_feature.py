@@ -7,14 +7,15 @@ etc.
 """
 
 import asyncio
-import os
 import copy
 from functools import wraps
+import inspect
 import numbers
+import os
 import platform
 import re
 import tempfile
-from typing import List, Optional, Callable, Union
+from typing import *
 
 import numpy as np
 import mongoengine as me
@@ -54,6 +55,8 @@ class result(exposed):
 
     is_refresh = True
     exposed = True
+    
+    RESERVED_PARAMETERS = ['no_cache']
 
     def __init__(self, fn: Callable) -> None:
         """This accepts a 'result-granting' function and returns a refresh function
@@ -68,27 +71,42 @@ class result(exposed):
         TODO: think about it and assign `index` correctly...
         """
 
-        # First wrap the function to make it refresh
+        # First of all, check that the function signature is legal, not
+        # not trampling over the needs of @result.
+        for param in inspect.signature(fn).parameters:
+            if param in self.RESERVED_PARAMETERS:
+                raise errors.ReservedParameterError(param)
+
+        # Wrap the function to make it refresh
         self.obj = None
 
         @wraps(fn)
         def wrapped_fn(*args, **kwargs):
-            feature = args[0] # TODO: is this good practice?
+            feature = args[0]  # TODO: is this good practice?
 
-            index = kwargs.get('index') or -1  # default last entry
+            # Select result number
+            index = kwargs.get('index', -1)
+            # Recompute a value instead of fetching it from cache.
+            # Don't forward it to fn if this argument is passed!
+            no_cache = kwargs.pop('no_cache', False)
+            
             # Ensure that `results` is long enough.
             if index < 0:
                 index = len(feature.log_history) + index
             while len(feature.results) <= index:
                 feature.results.append({})
 
+            if no_cache:
+                # Clear the cache for _all_ results at this index.
+                feature.results[index] = {}
+
             try:
-                return_value = feature.results[index][fn.__name__]
-            except KeyError:  # Results of this function at this index not cached!
+                return feature.results[index][fn.__name__]
+            except KeyError:
                 return_value = fn(*args, **kwargs)
                 feature.results[index][fn.__name__] = return_value
                 feature.save()
-            return return_value
+                return return_value
 
         wrapped_fn.is_result = True
         self.wrapped_fn = wrapped_fn

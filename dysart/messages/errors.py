@@ -17,6 +17,10 @@ class InstrumentNotFoundError(DysartError):
     pass
 
 
+class ReservedParameterError(DysartError):
+    pass
+
+
 class ServiceError(DysartError):
     pass
 
