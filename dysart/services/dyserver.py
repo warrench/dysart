@@ -43,7 +43,7 @@ def process_request(coro):
 
     Returns:
         A coroutine function, notionally an HTTP request handler.
-    
+
     Todo:
         Need to figure out how to unwrap the response to persist its body
         in the RequestRecord
@@ -91,7 +91,7 @@ class Dyserver(service.Service):
 
         self.app = web.Application()
         self.setup_routes()
-        
+
     # TODO marked for deletion
     def is_running(self) -> bool:
         return hasattr(self, 'httpd')
@@ -114,7 +114,13 @@ class Dyserver(service.Service):
         """
         with messages.StatusMessage('{}connecting to database...'.format(messages.TAB)):
             try:
-                self.db_client = me.connect(conf.config['default_db'], host=host, port=port)
+                #Added support for database authentication with users
+                self.db_client = me.connect(conf.config['default_db'],
+                                            host=host,
+                                            port=port,
+                                            username=conf.config['user_name'],
+                                            password=conf.config['password'],
+                                            authentication_source=conf.config['auth_db'])
                 # Do the following lines do anything? I actually don't know.
                 sys.path.pop(0)
                 sys.path.insert(0, os.getcwd())
@@ -152,9 +158,9 @@ class Dyserver(service.Service):
         """Auth for an incoming HTTP request. In the future this will probably
         do some more elaborate three-way handshake; for now, it simply checks
         the incoming IP address against a whitelist.
-        
+
         Args:
-            request: 
+            request:
 
         Raises:
             web.HTTPUnauthorized
@@ -168,10 +174,10 @@ class Dyserver(service.Service):
         user, token = base64.b64decode(credentials).decode('utf-8').split(':')
         if Dyserver.hashpass(token) not in conf.config['tokens']:
             raise web.HTTPUnauthorized
-    
+
     async def refresh_feature(self, feature, request: RequestRecord):
         """
-        
+
         Args:
             feature: the feature to be refreshed
 
@@ -189,7 +195,7 @@ class Dyserver(service.Service):
                 await scheduled_feature.exec_feature(record)
         except errors.InstrumentNotFoundError as e:
             raise web.HTTPNotImplemented(reason=f"Instrument not found: {e}")
-            
+
     @process_request
     async def feature_get_handler(self, request: RequestRecord):
         """Handles requests that only retrieve data about Features.
@@ -219,7 +225,7 @@ class Dyserver(service.Service):
             raise web.HTTPNotFound(
                 reason=f"Feature {data['feature']} not found"
             )
-        
+
         response_data = feature._repr_dict_()
         response_data['name'] = data['feature']
         return web.Response(body=json.dumps(response_data))
@@ -227,7 +233,7 @@ class Dyserver(service.Service):
     @process_request
     async def feature_post_handler(self, request: RequestRecord):
         """Handles requests that may mutate state.
-        
+
         Args:
             request: request data is expected to have the fields,
             `project`, `feature`, `method`, `args`, and `kwargs`.
@@ -244,7 +250,7 @@ class Dyserver(service.Service):
             raise web.HTTPNotFound(
                 reason=f"Feature {data['feature']} not found"
             )
-        
+
         method = getattr(feature, data['method'], None)
         if not isinstance(method, exposed):
             # This exception will be raised if there is no such method *or* if
@@ -252,10 +258,10 @@ class Dyserver(service.Service):
             raise web.HTTPNotFound(
                 reason=f"Feature {data['feature']} has no method {data['method']}"
             )
-        
+
         if hasattr(method, 'is_refresh'):
             await self.refresh_feature(feature, request)
-        
+
         print(f"Calling method `{data['method']}` of feature `{data['feature']}`")
         return_value = method(*data['args'], **data['kwargs'])
         return web.Response(body=pickle.dumps(return_value))
@@ -273,11 +279,11 @@ class Dyserver(service.Service):
 
         """
         data = request.json
-        
+
         def exposed_method_names(feature_id: str):
             return [m.__name__ for m in
                     self.project.features[feature_id].exposed_methods()]
-            
+
         try:
             print(f"Loading project `{data['project']}`")
             self.load_project(conf.config['projects'][data['project']])
@@ -302,9 +308,9 @@ class Dyserver(service.Service):
         """A handler invoked by a client-side request to transfer control
         of the server process to a debugger. This feature should be disabled
         without admin authentication
-        
+
         Args:
-            request: 
+            request:
 
         Returns:
 
@@ -313,7 +319,7 @@ class Dyserver(service.Service):
         breakpoint()
         pass  # A reminder that nothing is supposed to happen
         return web.Response()
-    
+
     def setup_routes(self):
         self.app.router.add_post('/feature', self.feature_post_handler)
         self.app.router.add_get('/feature', self.feature_get_handler)
